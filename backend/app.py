@@ -381,8 +381,16 @@ def send_login_otp_email(recipient_email, username, role, otp):
         "Do not share this code with anyone.\n"
         "If you did not try to log in, please contact the administrator."
     )
-    send_email_in_thread(message)
-    return {'ok': True}
+    # Send synchronously so SMTP errors are caught and returned,
+    # instead of being silently swallowed in a background thread.
+    try:
+        with app.app_context():
+            mail.send(message)
+        return {'ok': True}
+    except Exception as e:
+        error_msg = str(e)
+        print(f"[OTP EMAIL ERROR] Failed to send OTP to {recipient_email}: {error_msg}")
+        return {'ok': False, 'message': f'SMTP error: {error_msg}'}
 
 
 def invalidate_existing_otp_challenges(username):
@@ -2181,7 +2189,7 @@ def login_post():
                 # Inform the user what to do — require env var to enable bypass.
                 return redirect(url_for('login', error='SMTP not configured. To allow local admin sign-in without OTP set ALLOW_ADMIN_NO_OTP=1'))
 
-            admin_otp_email = (get_config('admin_otp_email') or 'slganeshkarthik@gmail.com').strip()
+            admin_otp_email = (get_config('admin_otp_email') or os.environ.get('ADMIN_OTP_EMAIL') or '').strip()
             if not admin_otp_email:
                 return redirect(url_for('login', error='Admin OTP email is not configured'))
 
