@@ -31,6 +31,7 @@ def _get_pool():
             pool_size=10,
             pool_reset_session=True,
             host=settings["host"],
+            port=settings["port"],
             user=settings["user"],
             password=settings["password"],
             database=settings["database"],
@@ -56,6 +57,7 @@ def resolve_buffer_minutes(buffer_minutes=None):
 def _db_settings():
     return {
         "host": os.environ.get("DB_HOST", "localhost"),
+        "port": int(os.environ.get("DB_PORT", "3306")),
         "user": os.environ.get("DB_USER", "root"),
         "password": os.environ.get("DB_PASSWORD", ""),
         "database": os.environ.get("DB_NAME", "user_database"),
@@ -68,6 +70,7 @@ def _ensure_database_exists():
     # Connect without selecting a database so first-run setup can create it.
     conn = mysql.connector.connect(
         host=settings["host"],
+        port=settings["port"],
         user=settings["user"],
         password=settings["password"],
     )
@@ -86,6 +89,7 @@ def get_connection():
         settings = _db_settings()
         return mysql.connector.connect(
             host=settings["host"],
+            port=settings["port"],
             user=settings["user"],
             password=settings["password"],
             database=settings["database"],
