@@ -1,0 +1,1633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{{ (role or 'approver')|upper }} Dashboard - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe4ee;
+      --navy: #0f2748;
+      --navy-2: #17375f;
+      --accent: #1d4ed8;
+      --accent-soft: rgba(29, 78, 216, 0.12);
+      --success: #16a34a;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(29, 78, 216, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(15, 39, 72, 0.06), transparent 22%),
+        var(--bg);
+      color: var(--text);
+    }
+
+    .app-toast {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      min-width: 260px;
+      max-width: 360px;
+      padding: 12px 14px;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: 0 16px 34px rgba(2, 6, 23, 0.2);
+      transform: translateY(-8px);
+      opacity: 0;
+      pointer-events: none;
+      z-index: 1000;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+    }
+
+    .app-toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .app-toast.success {
+      background: #15803d;
+    }
+
+    .app-toast.error {
+      background: #b91c1c;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border-right: 1px solid var(--line);
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      height: 100vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: #eef4ff;
+      border: 1px solid #d8e4ff;
+    }
+
+    .brand-mark {
+      width: 40px;
+      height: 40px;
+      border-radius: 12px;
+      background: var(--navy);
+      color: white;
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      flex: 0 0 auto;
+    }
+
+    .brand-title {
+      font-weight: 800;
+      font-size: 15px;
+      line-height: 1.1;
+    }
+
+    .brand-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    .side-section {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .side-label {
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #94a3b8;
+      padding: 0 10px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      color: #334155;
+      font-weight: 600;
+      transition: 0.18s ease;
+    }
+
+    .nav-item:hover,
+    .nav-item.active {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 10px 26px rgba(15, 39, 72, 0.16);
+    }
+
+    .nav-item .icon {
+      width: 18px;
+      text-align: center;
+      opacity: 0.9;
+    }
+
+    .role-card {
+      margin-top: auto;
+      background: linear-gradient(180deg, var(--navy-2), var(--navy));
+      color: white;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .role-card .label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.7);
+      margin-bottom: 8px;
+    }
+
+    .role-card .name {
+      font-size: 18px;
+      font-weight: 800;
+      margin-bottom: 4px;
+    }
+
+    .role-card .meta {
+      color: rgba(255, 255, 255, 0.76);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .main {
+      padding: 28px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 22px;
+    }
+
+    .heading h1 {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+
+    .heading p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 15px;
+      max-width: 740px;
+      line-height: 1.6;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--navy);
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .sidebar-toggle:hover {
+      background: #f3f4f6;
+      border-color: #cfd8e4;
+    }
+
+    .sidebar-overlay {
+      display: none;
+    }
+
+    body.sidebar-locked {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .btn {
+      border: none;
+      border-radius: 14px;
+      padding: 12px 16px;
+      font-weight: 700;
+      font-size: 13px;
+      cursor: pointer;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-light {
+      background: var(--panel);
+      color: var(--navy);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+    }
+
+    .btn-dark {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 14px 28px rgba(15, 39, 72, 0.18);
+    }
+
+    .tabs {
+      display: inline-flex;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.82);
+      border: 1px solid var(--line);
+      box-shadow: 0 10px 26px rgba(15, 23, 42, 0.05);
+      margin-bottom: 18px;
+    }
+
+    .tab-btn {
+      border: none;
+      background: transparent;
+      padding: 10px 16px;
+      border-radius: 12px;
+      font-weight: 700;
+      color: #64748b;
+      cursor: pointer;
+    }
+
+    .tab-btn.active {
+      background: white;
+      color: var(--navy);
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.5fr) 350px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid rgba(219, 228, 238, 0.9);
+      border-radius: 22px;
+      box-shadow: var(--shadow);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 22px 22px 14px;
+    }
+
+    .card-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+    }
+
+    .card-subtitle {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .list {
+      padding: 0 22px 22px;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .request-card {
+      border: 1px solid #e6edf6;
+      border-radius: 18px;
+      background: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
+      padding: 18px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+    }
+
+    .request-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
+      border-color: #c9d8ef;
+    }
+
+    .request-top {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .requester {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      background: #dbeafe;
+      color: #1d4ed8;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    .avatar.alt {
+      background: #fde7d8;
+      color: #c2410c;
+    }
+
+    .avatar.third {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
+
+    .requester-name {
+      font-weight: 800;
+      font-size: 16px;
+    }
+
+    .requester-meta {
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 3px;
+    }
+
+    .request-id {
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 700;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .detail-box {
+      background: var(--panel-soft);
+      border: 1px solid #e6edf6;
+      border-radius: 14px;
+      padding: 12px 14px;
+    }
+
+    .detail-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    .detail-value {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+    }
+
+    .request-note {
+      border: 1px solid #dbe4ee;
+      border-left: 4px solid #64748b;
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 10px 12px;
+      margin: -2px 0 16px;
+    }
+
+    .request-note-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: #64748b;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 5px;
+    }
+
+    .request-note-text {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .request-actions {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+
+    .view-btn {
+      background: transparent;
+      border: none;
+      color: var(--navy);
+      font-weight: 800;
+      font-size: 13px;
+      cursor: pointer;
+      padding: 0;
+    }
+
+    .decision-group {
+      display: flex;
+      gap: 10px;
+    }
+
+    .btn-approve {
+      background: var(--navy);
+      color: white;
+      min-width: 116px;
+    }
+
+    .btn-reject {
+      background: #fff4f4;
+      color: var(--danger);
+      border: 1px solid #f8caca;
+      min-width: 116px;
+    }
+
+    .btn-override {
+      background: #fff7ed;
+      color: #9a3412;
+      border: 1px solid #fed7aa;
+      min-width: 116px;
+    }
+
+    .comment-area {
+      width: 100%;
+      min-height: 76px;
+      resize: vertical;
+      border: 1px solid #dbe4ee;
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      margin-top: 12px;
+      outline: none;
+    }
+
+    .comment-area:focus {
+      border-color: rgba(29, 78, 216, 0.45);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .empty-state {
+      border: 1px dashed #cbd5e1;
+      border-radius: 18px;
+      padding: 32px 18px;
+      text-align: center;
+      color: var(--muted);
+      background: #fbfdff;
+    }
+
+    .side-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .widget {
+      background: var(--navy);
+      color: white;
+      border-radius: 24px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .widget.light {
+      background: white;
+      color: var(--text);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+
+    .widget-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 18px;
+    }
+
+    .outlook-grid {
+      display: grid;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .outlook-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mini-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.12);
+      display: grid;
+      place-items: center;
+      font-size: 16px;
+      flex: 0 0 auto;
+    }
+
+    .widget.light .mini-icon {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .outlook-value {
+      font-size: 24px;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .outlook-label {
+      margin-top: 2px;
+      font-size: 12px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: rgba(255, 255, 255, 0.68);
+    }
+
+    .widget.light .outlook-label,
+    .widget.light .helper,
+    .widget.light .muted {
+      color: var(--muted);
+    }
+
+    .quote {
+      margin-top: 10px;
+      font-size: 14px;
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.76);
+      font-style: italic;
+    }
+
+    .bar-list {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .bar-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .bar-label {
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+      color: inherit;
+    }
+
+    .bar-track {
+      grid-column: 1 / -1;
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.18);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #1d4ed8, #60a5fa);
+    }
+
+    .recent-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .recent-item {
+      padding-left: 12px;
+      border-left: 3px solid #dbe4ee;
+    }
+
+    .recent-item.approved {
+      border-left-color: var(--success);
+    }
+
+    .recent-item.rejected {
+      border-left-color: var(--danger);
+    }
+
+    .recent-title {
+      font-weight: 700;
+      font-size: 14px;
+      margin-bottom: 2px;
+    }
+
+    .recent-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+
+    .history-card {
+      margin-top: 18px;
+    }
+
+    .history-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    .history-table th,
+    .history-table td {
+      text-align: left;
+      padding: 12px 22px;
+      border-top: 1px solid #edf2f7;
+      font-size: 13px;
+      vertical-align: top;
+    }
+
+    .history-table th {
+      color: #475569;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 11px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .pill.pending {
+      background: #fff7ed;
+      color: #9a3412;
+    }
+
+    .pill.approved {
+      background: #ecfdf5;
+      color: #047857;
+    }
+
+    .pill.rejected {
+      background: #fef2f2;
+      color: #b91c1c;
+    }
+
+    .pill.neutral {
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .msg {
+      min-height: 18px;
+      margin-top: 10px;
+      font-size: 13px;
+      color: var(--muted);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    @media (max-width: 1200px) {
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1001;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .layout.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 1000;
+      }
+
+      .layout.sidebar-open .sidebar-overlay {
+        display: block;
+      }
+
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 780px) {
+      .main {
+        padding: 18px;
+      }
+
+      .topbar {
+        flex-direction: column;
+      }
+
+      .top-actions {
+        justify-content: flex-start;
+      }
+
+      .heading h1 {
+        font-size: 28px;
+      }
+
+      .detail-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .request-actions {
+        align-items: stretch;
+      }
+
+      .decision-group {
+        width: 100%;
+      }
+
+      .btn-approve,
+      .btn-reject {
+        flex: 1;
+      }
+
+      .card-header,
+      .history-table th,
+      .history-table td {
+        padding-left: 16px;
+        padding-right: 16px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main {
+        padding: 12px;
+      }
+
+      .heading h1 {
+        font-size: 22px;
+      }
+
+      .heading p {
+        font-size: 13px;
+      }
+
+      .tabs {
+        width: 100%;
+      }
+
+      .tab-btn {
+        flex: 1;
+        text-align: center;
+        padding: 8px 10px;
+        font-size: 12px;
+      }
+
+      .top-actions {
+        width: 100%;
+      }
+
+      .top-actions .btn {
+        flex: 1;
+        font-size: 12px;
+        padding: 10px 12px;
+      }
+
+      .request-card {
+        padding: 14px;
+      }
+
+      .requester-name {
+        font-size: 14px;
+      }
+
+      .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 10px;
+      }
+
+      .detail-box {
+        padding: 10px 12px;
+      }
+
+      .detail-label {
+        font-size: 10px;
+      }
+
+      .detail-value {
+        font-size: 13px;
+      }
+
+      .card-header {
+        padding: 16px 14px 10px;
+      }
+
+      .card-title {
+        font-size: 16px;
+      }
+
+      .list {
+        padding: 0 14px 14px;
+      }
+
+      .widget {
+        padding: 16px;
+        border-radius: 18px;
+      }
+
+      .widget-title {
+        font-size: 16px;
+      }
+
+      .outlook-value {
+        font-size: 20px;
+      }
+
+      .history-table th,
+      .history-table td {
+        padding: 10px 12px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">🏛</div>
+        <div>
+          <div class="brand-title">{{ config.app_title if config else 'Meeting Hall System' }}</div>
+          <div class="brand-subtitle">{{ config.app_brand if config else 'University Hall Management' }}</div>
+        </div>
+      </div>
+
+      <div class="side-section">
+        <div class="side-label">Navigation</div>
+        <a class="nav-item active" href="/approver-dashboard.html"><span class="icon">▣</span> Dashboard</a>
+        <a class="nav-item" href="/approver-analytics.html"><span class="icon">📊</span> Analytics</a>
+        <a class="nav-item" href="/requester-dashboard.html"><span class="icon">▤</span> My Bookings</a>
+        <a class="nav-item" href="/settings.html"><span class="icon">⚙</span> Settings</a>
+        <a class="nav-item" href="/logout" style="color: #dc2626;"><span class="icon">🚪</span> Logout</a>
+      </div>
+
+
+      <div class="role-card">
+        <div class="label">Current Role</div>
+        <div class="name" id="roleName">{{ role|upper if role else 'APPROVER' }}</div>
+        <div class="meta">{{ user.name if user and user.name else user.username if user else 'Approver' }}</div>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-overlay></div>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="heading">
+          <h1 id="pageTitle">{{ role|upper if role else 'Approver' }} Dashboard</h1>
+          <p id="pageSubtitle">Review pending meeting room requests, track recent decisions, and monitor weekly workload from one place.</p>
+        </div>
+        <div class="top-actions">
+          <button class="btn btn-light" type="button" id="exportBtn">⬇ Export Reports</button>
+          <button class="btn btn-dark" type="button" id="refreshBtn">↻ Refresh Queue</button>
+          <button class="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-sidebar-toggle>⋮</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Approver dashboard tabs">
+        <button class="tab-btn active" type="button" data-tab="pending">Pending Requests</button>
+        <button class="tab-btn" type="button" data-tab="history">Decision History</button>
+      </div>
+
+      <div class="content-grid">
+        <section class="card" id="pendingPanel">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Pending Requests</div>
+              <div class="card-subtitle" id="pendingSubtitle">Loading pending requests...</div>
+            </div>
+            <div class="pill neutral" id="pendingPill">0 waiting</div>
+          </div>
+          <div id="pendingList" class="list">
+            <div class="empty-state">Loading pending requests...</div>
+          </div>
+        </section>
+
+        <section class="card hidden" id="historyPanel">
+          <div class="card-header">
+            <div>
+              <div class="card-title">Decision History</div>
+              <div class="card-subtitle" id="historySubtitle">Recent approvals and rejections handled by this role.</div>
+            </div>
+          </div>
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Request</th>
+                <th>Requester</th>
+                <th>Purpose</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody id="historyRows">
+              <tr><td colspan="4">Loading history...</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <aside class="side-stack">
+          <section class="widget">
+            <div class="widget-title">Weekly Outlook</div>
+            <div class="outlook-grid">
+              <div class="outlook-item">
+                <div class="mini-icon">⌛</div>
+                <div>
+                  <div class="outlook-value" id="pendingCount">0</div>
+                  <div class="outlook-label">Pending Action</div>
+                </div>
+              </div>
+              <div class="outlook-item">
+                <div class="mini-icon">📅</div>
+                <div>
+                  <div class="outlook-value" id="confirmedCount">0</div>
+                  <div class="outlook-label">Confirmed Events</div>
+                </div>
+              </div>
+              <div class="outlook-item">
+                <div class="mini-icon">❌</div>
+                <div>
+                  <div class="outlook-value" id="rejectedCount">0</div>
+                  <div class="outlook-label">Rejected Events</div>
+                </div>
+              </div>
+              <div class="outlook-item">
+                <div class="mini-icon">⚠</div>
+                <div>
+                  <div class="outlook-value" id="conflictCount">0</div>
+                  <div class="outlook-label">Schedule Conflicts</div>
+                </div>
+              </div>
+            </div>
+            <div class="quote" id="weeklyQuote">"The hall booking workflow is operating smoothly."</div>
+          </section>
+
+          <section class="widget light">
+            <div class="widget-title">Recent Actions</div>
+            <div class="recent-list" id="recentActionsList">
+              <div class="empty-state">Loading recent actions...</div>
+            </div>
+          </section>
+        </aside>
+      </div>
+
+      <section class="card history-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Request Details</div>
+            <div class="card-subtitle">Use the View Details control on each pending request to inspect the full slot data before deciding.</div>
+          </div>
+        </div>
+        <div id="message" class="msg"></div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+  <script>
+    const approverRole = "{{ role|default('approver') }}";
+    const canOverride = ['hod', 'principal', 'secretary', 'admin'].includes(String(approverRole || '').toLowerCase());
+    const roleLabel = approverRole ? approverRole.toUpperCase() : 'APPROVER';
+    const pendingList = document.getElementById('pendingList');
+    const historyRows = document.getElementById('historyRows');
+    const pendingSubtitle = document.getElementById('pendingSubtitle');
+    const pendingPill = document.getElementById('pendingPill');
+    const pendingCount = document.getElementById('pendingCount');
+    const confirmedCount = document.getElementById('confirmedCount');
+    const rejectedCount = document.getElementById('rejectedCount');
+    const conflictCount = document.getElementById('conflictCount');
+    const weeklyQuote = document.getElementById('weeklyQuote');
+    const recentActionsList = document.getElementById('recentActionsList');
+    const message = document.getElementById('message');
+    const exportBtn = document.getElementById('exportBtn');
+    const refreshBtn = document.getElementById('refreshBtn');
+    const hallNameByRoom = {};
+
+    document.getElementById('roleName').textContent = roleLabel;
+    document.getElementById('pageTitle').textContent = `${roleLabel} Dashboard`;
+    document.getElementById('pageSubtitle').textContent = `Review pending meeting room requests for the ${roleLabel} workflow, track recent decisions, and monitor weekly workload from one place.`;
+
+    function fmt(value) {
+      if (!value) return '-';
+      // Normalize common MySQL/Flask datetime formats ("YYYY-MM-DD HH:MM:SS")
+      // to a safe ISO format that the JS Date parser handles consistently.
+      try {
+        let v = String(value).trim();
+        // If server returned an RFC-style GMT string (e.g. "Thu, 23 Apr 2026 07:30:00 GMT"),
+        // drop the timezone suffix so it's treated as local time (backend stores local times).
+        v = v.replace(/\s*(GMT|UTC|Z)$/i, '');
+        // If it's 'YYYY-MM-DD HH:MM:SS', convert to 'YYYY-MM-DDTHH:MM:SS' for stable parsing.
+        const simpleDatetime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        if (simpleDatetime.test(v)) v = v.replace(' ', 'T');
+        const d = new Date(v);
+        if (Number.isNaN(d.getTime())) return value;
+        const datePart = d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+        const timePart = d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: true });
+        return `${datePart} ${timePart}`;
+      } catch (e) {
+        return value;
+      }
+    }
+
+    function decisionClass(decision) {
+      const normalized = String(decision || '').toLowerCase();
+      if (normalized === 'approved') return 'approved';
+      if (normalized === 'rejected') return 'rejected';
+      return 'pending';
+    }
+
+    function shorten(value, length = 78) {
+      const text = String(value || '');
+      return text.length > length ? `${text.slice(0, length - 1)}…` : text;
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+      }[char]));
+    }
+
+    function firstTextValue(...values) {
+      for (const value of values) {
+        const text = String(value ?? '').trim();
+        if (text) return text;
+      }
+      return '';
+    }
+
+    function requesterCommentFor(item) {
+      return firstTextValue(item?.user_comment, item?.requester_comment);
+    }
+
+    function renderRequestNote(label, value) {
+      const text = firstTextValue(value);
+      if (!text) return '';
+      return `
+        <div class="request-note">
+          <div class="request-note-label">${escapeHtml(label)}</div>
+          <div class="request-note-text">${escapeHtml(text)}</div>
+        </div>
+      `;
+    }
+
+    function setMessage(text, color = '#64748b') {
+      message.textContent = text || '';
+      message.style.color = color;
+    }
+
+    let toastTimer = null;
+    function showToast(text, type = 'success') {
+      let toast = document.getElementById('appToast');
+      if (!toast) {
+        toast = document.createElement('div');
+        toast.id = 'appToast';
+        toast.className = 'app-toast';
+        document.body.appendChild(toast);
+      }
+
+      toast.textContent = text || '';
+      toast.className = `app-toast ${type === 'error' ? 'error' : 'success'}`;
+
+      if (toastTimer) {
+        window.clearTimeout(toastTimer);
+      }
+
+      requestAnimationFrame(() => toast.classList.add('show'));
+      toastTimer = window.setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2200);
+    }
+
+    function setActiveTab(tab) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.tab === tab);
+      });
+      document.getElementById('pendingPanel').classList.toggle('hidden', tab !== 'pending');
+      document.getElementById('historyPanel').classList.toggle('hidden', tab !== 'history');
+    }
+
+    function roomNameFor(item) {
+      const roomNo = item && item.room_no != null ? String(item.room_no) : '';
+      return (item && item.room_name) || hallNameByRoom[roomNo] || (roomNo ? `Hall ${roomNo}` : '-');
+    }
+
+    async function loadHallNames() {
+      try {
+        const res = await fetch('/api/halls', { headers: { 'Accept': 'application/json' } });
+        const halls = await res.json();
+        if (!res.ok || !Array.isArray(halls)) {
+          return;
+        }
+
+        halls.forEach(h => {
+          if (h && h.room_no != null) {
+            hallNameByRoom[String(h.room_no)] = h.hall_name || `Hall ${h.room_no}`;
+          }
+        });
+      } catch (error) {
+        // Ignore hall name preload failures; API payload may already include room_name.
+      }
+    }
+
+
+    function renderRecentActions(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        recentActionsList.innerHTML = '<div class="empty-state">No recent actions yet.</div>';
+        return;
+      }
+
+      recentActionsList.innerHTML = items.map(item => {
+        const state = decisionClass(item.decision);
+        return `
+          <div class="recent-item ${state}">
+            <div class="recent-title">${String(item.decision || '-').toUpperCase()} #${item.request_id || '-'}</div>
+            <div class="recent-meta">
+              ${shorten(item.requester_name || item.username || 'Unknown')} · ${shorten(item.purpose || '-', 48)}<br>
+              ${fmt(item.acted_at || item.submitted_at)}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function applyOverrideAction(requestId, fallbackReason = '') {
+      const id = Number(requestId || 0);
+      if (!id) {
+        setMessage('Invalid request id for override.', '#dc2626');
+        return;
+      }
+
+      const newStatusRaw = window.prompt('Override status (Approved, Rejected, Cancelled, Expired):', 'Approved');
+      if (!newStatusRaw) {
+        return;
+      }
+
+      const normalized = String(newStatusRaw).trim().toLowerCase();
+      const statusMap = {
+        approved: 'Approved',
+        rejected: 'Rejected',
+        cancelled: 'Cancelled',
+        canceled: 'Cancelled',
+        expired: 'Expired'
+      };
+      const new_status = statusMap[normalized] || '';
+      if (!new_status) {
+        setMessage('Invalid override status.', '#dc2626');
+        showToast('Invalid override status.', 'error');
+        return;
+      }
+
+      setMessage('Applying override...');
+      try {
+        const res = await fetch(`/api/bookings/${id}/override`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify({
+            new_status,
+            reason: fallbackReason || `${roleLabel} override`
+          })
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          setMessage(data.error || 'Unable to apply override.', '#dc2626');
+          showToast(data.error || 'Unable to apply override.', 'error');
+        } else {
+          setMessage(data.message || 'Status overridden.', '#16a34a');
+          showToast('Override successful.', 'success');
+          await loadDashboard();
+        }
+      } catch (error) {
+        setMessage('Unable to apply override.', '#dc2626');
+        showToast('Unable to apply override.', 'error');
+      }
+    }
+
+    function renderPending(items) {
+      const count = Array.isArray(items) ? items.length : 0;
+      pendingSubtitle.textContent = count > 0
+        ? `${count} request${count === 1 ? '' : 's'} awaiting your decision.`
+        : 'No requests are currently waiting for your approval.';
+      pendingPill.textContent = `${count} waiting`;
+      pendingCount.textContent = String(count);
+
+      if (!count) {
+        pendingList.innerHTML = '<div class="empty-state">No pending requests right now.</div>';
+        return;
+      }
+
+      pendingList.innerHTML = items.map((item, index) => {
+        const avatarClass = index % 3 === 0 ? '' : index % 3 === 1 ? 'alt' : 'third';
+        const initials = (item.requester_name || item.username || '?').trim().slice(0, 1).toUpperCase();
+        const requesterComment = requesterCommentFor(item);
+        return `
+          <article class="request-card" data-request-id="${item.request_id}">
+            <div class="request-top">
+              <div class="requester">
+                <div class="avatar ${avatarClass}">${initials}</div>
+                <div>
+                  <div class="requester-name">${item.requester_name || item.name || item.username || 'Unknown requester'}</div>
+                  <div class="requester-meta">${item.requester_department || item.department || 'No department'} · ${item.booking_id || 'No booking ID'}</div>
+                </div>
+              </div>
+              <div class="request-id">Request ID: #${item.request_id}</div>
+            </div>
+
+            <div class="detail-grid">
+              <div class="detail-box">
+                <div class="detail-label">Hall Location</div>
+                <div class="detail-value">${roomNameFor(item)} - ${item.room_no || '-'}</div>
+              </div>
+              <div class="detail-box">
+                <div class="detail-label">Date & Time</div>
+                <div class="detail-value">${fmt(item.requested_start)}<br>${fmt(item.requested_end)}</div>
+              </div>
+              <div class="detail-box">
+                <div class="detail-label">Event Type</div>
+                <div class="detail-value">${item.purpose || '-'}</div>
+              </div>
+            </div>
+
+            ${renderRequestNote('User Comment', requesterComment)}
+            ${(item.all_comments && item.all_comments.length > 0) ? item.all_comments.map(c => `<div style="margin-top:6px; padding:6px; background:#f8fafc; border-left:3px solid #64748b; white-space:pre-wrap; word-break:break-word;"><strong>${escapeHtml(String(c.role || 'Approver').toUpperCase())} Comment:</strong> ${escapeHtml(c.comment || '-')}</div>`).join('') : ''}
+
+            <div class="detail-box hidden request-details" id="details-${item.request_id}">
+              <div class="detail-label">Full Request Details</div>
+                <div class="detail-value">
+                Status: ${item.request_status || '-'}<br>
+                Submitted: ${fmt(item.submitted_at)}<br>
+                ${item.finalized_at ? `Confirmed: ${fmt(item.finalized_at)}<br>` : ''}
+                Contact: ${item.requester_phone || item.phone || 'Not provided'}<br>
+                Persons: ${item.number_of_persons || '-'}<br>
+                Equipment: ${item.equipment_needs || 'None requested'}<br>
+                ${item.document_path ? `
+                  <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
+                    <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:6px; font-weight:600">Supporting Document</div>
+                    ${/\.(jpg|jpeg|png|gif|webp)$/i.test(item.document_path)
+                      ? `<a href="${item.document_path}" target="_blank" rel="noopener" download style="display:inline-block">
+                           <img src="${item.document_path}" alt="Uploaded document" style="max-width:280px; max-height:200px; border-radius:8px; border:1px solid var(--border); cursor:pointer; transition:transform 0.2s" onmouseover="this.style.transform='scale(1.03)'" onmouseout="this.style.transform='scale(1)'">
+                         </a>`
+                      : `<a href="${item.document_path}" target="_blank" rel="noopener" download style="display:inline-flex; align-items:center; gap:6px; padding:8px 14px; background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--primary); text-decoration:none; font-size:13px; font-weight:500; transition:background 0.15s" onmouseover="this.style.background='#e8eef6'" onmouseout="this.style.background='var(--bg)'">
+                           <span style="font-size:16px">&#128196;</span> View/Download Document
+                         </a>`
+                    }
+                  </div>` : ''}
+              </div>
+            </div>
+
+            <textarea class="comment-area" id="comment-${item.request_id}" placeholder="Optional comment for this decision"></textarea>
+
+            <div class="request-actions">
+              <button class="view-btn" type="button" data-toggle="${item.request_id}">View Details</button>
+              <div class="decision-group">
+                <button class="btn btn-reject" type="button" data-id="${item.request_id}" data-decision="rejected">Reject</button>
+                <button class="btn btn-dark btn-approve" type="button" data-id="${item.request_id}" data-decision="approved">Approve</button>
+                ${canOverride ? `<button class="btn btn-override" type="button" data-id="${item.request_id}" data-action="override">Override</button>` : ''}
+              </div>
+            </div>
+          </article>
+        `;
+      }).join('');
+
+      pendingList.querySelectorAll('button[data-id]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          const decision = btn.getAttribute('data-decision');
+          const comment = document.getElementById(`comment-${id}`).value;
+          btn.disabled = true;
+          setMessage('Submitting decision...');
+          try {
+            const res = await fetch(`/api/bookings/${id}/decision`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+              body: JSON.stringify({ decision, comment })
+            });
+            const data = await res.json();
+            if (!res.ok || !data.ok) {
+              setMessage(data.message || data.error || 'Unable to save decision.', '#dc2626');
+            } else {
+              setMessage(data.message || 'Decision saved.', '#16a34a');
+              await loadDashboard();
+            }
+          } catch (error) {
+            setMessage('Unable to save decision.', '#dc2626');
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+
+      pendingList.querySelectorAll('button[data-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-toggle');
+          const details = document.getElementById(`details-${id}`);
+          if (!details) return;
+          details.classList.toggle('hidden');
+          btn.textContent = details.classList.contains('hidden') ? 'View Details' : 'Hide Details';
+        });
+      });
+
+      pendingList.querySelectorAll('button[data-action="override"]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const id = btn.getAttribute('data-id');
+          const comment = document.getElementById(`comment-${id}`)?.value || '';
+          btn.disabled = true;
+          try {
+            await applyOverrideAction(id, comment || `${roleLabel} override`);
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    function renderHistory(items) {
+      if (!Array.isArray(items) || items.length === 0) {
+        historyRows.innerHTML = '<tr><td colspan="4">No decision history available yet.</td></tr>';
+        return;
+      }
+
+      historyRows.innerHTML = items.map(item => {
+        const decision = String(item.decision || '').toLowerCase();
+        const requesterComment = requesterCommentFor(item);
+        const commentLine = requesterComment
+          ? `<br><span style="color:#475569">User Comment: ${escapeHtml(shorten(requesterComment, 72))}</span>`
+          : '';
+        const otherComments = (item.all_comments && item.all_comments.length > 0)
+          ? item.all_comments.map(c => `<br><span style="color:#1e40af; font-size: 13px;">${escapeHtml(String(c.role || 'Approver').toUpperCase())}: ${escapeHtml(shorten(c.comment || '-', 60))}</span>`).join('')
+          : '';
+        const overrideAction = canOverride
+          ? `<br><button class="view-btn" type="button" data-history-override="${item.request_id}">Override</button>`
+          : '';
+        return `
+          <tr>
+            <td>#${item.request_id || '-'}<br><span style="color:#64748b">${item.booking_id || '-'}</span></td>
+            <td>${item.requester_name || item.username || '-' }<br><span style="color:#64748b">${item.requester_department || '-'}</span></td>
+            <td>${shorten(item.purpose || '-', 52)}<br><span style="color:#64748b">${fmt(item.requested_start)} → ${fmt(item.requested_end)}</span>${commentLine}${otherComments}</td>
+            <td><span class="pill ${decisionClass(decision)}">${decision || 'Pending'}</span><br><span style="color:#64748b">${fmt(item.finalized_at || item.acted_at || item.submitted_at)}</span>${overrideAction}</td>
+          </tr>
+        `;
+      }).join('');
+
+      historyRows.querySelectorAll('button[data-history-override]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const requestId = btn.getAttribute('data-history-override');
+          btn.disabled = true;
+          try {
+            await applyOverrideAction(requestId, `${roleLabel} history override`);
+          } finally {
+            btn.disabled = false;
+          }
+        });
+      });
+    }
+
+    async function loadDashboard() {
+      setMessage('Loading dashboard...');
+      try {
+        const [summaryRes, pendingRes, historyRes] = await Promise.all([
+          fetch('/api/approvals/summary', { headers: { 'Accept': 'application/json' } }),
+          fetch('/api/approvals/pending', { headers: { 'Accept': 'application/json' } }),
+          fetch('/api/approvals/history?limit=20', { headers: { 'Accept': 'application/json' } })
+        ]);
+
+        const summary = await summaryRes.json();
+        const pending = await pendingRes.json();
+        const history = await historyRes.json();
+
+        if (!summaryRes.ok || !summary.ok) {
+          throw new Error(summary.error || 'Failed to load dashboard summary.');
+        }
+        if (!pendingRes.ok) {
+          throw new Error((pending && pending.error) || 'Failed to load pending requests.');
+        }
+        if (!historyRes.ok) {
+          throw new Error((history && history.error) || 'Failed to load history.');
+        }
+
+        pendingCount.textContent = String(summary.counts?.pending_action ?? 0);
+        confirmedCount.textContent = String(summary.counts?.confirmed_events ?? 0);
+        rejectedCount.textContent = String(summary.counts?.rejected_events ?? 0);
+        conflictCount.textContent = String(summary.counts?.schedule_conflicts ?? 0);
+
+        const pendingListData = Array.isArray(pending) ? pending : [];
+        const historyData = Array.isArray(history.history) ? history.history : [];
+
+        renderPending(pendingListData);
+        renderHistory(historyData);
+        renderRecentActions(Array.isArray(summary.recent_actions) ? summary.recent_actions : []);
+
+        weeklyQuote.textContent = pendingListData.length > 0
+          ? `"You have ${pendingListData.length} request${pendingListData.length === 1 ? '' : 's'} waiting for action this week."`
+          : '"The hall booking workflow is operating smoothly."';
+
+        setMessage('Dashboard loaded successfully.', '#16a34a');
+      } catch (error) {
+        setMessage(error.message || 'Unable to load dashboard.', '#dc2626');
+        pendingList.innerHTML = '<div class="empty-state">Unable to load pending requests.</div>';
+        historyRows.innerHTML = '<tr><td colspan="4">Unable to load decision history.</td></tr>';
+        recentActionsList.innerHTML = '<div class="empty-state">Unable to load recent actions.</div>';
+      }
+    }
+
+    function exportReport() {
+      const report = {
+        role: roleLabel,
+        generated_at: new Date().toISOString(),
+        counts: {
+          pending_action: Number(pendingCount.textContent || 0),
+          confirmed_events: Number(confirmedCount.textContent || 0),
+          rejected_events: Number(rejectedCount.textContent || 0),
+          schedule_conflicts: Number(conflictCount.textContent || 0)
+        },
+        pending_requests: Array.from(pendingList.querySelectorAll('.request-card')).length,
+        history_rows: Array.from(historyRows.querySelectorAll('tr')).length
+      };
+
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `${roleLabel.toLowerCase()}-dashboard-report.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(link.href);
+      setMessage('Report exported successfully.', '#16a34a');
+    }
+
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+      btn.addEventListener('click', () => setActiveTab(btn.dataset.tab));
+    });
+
+    refreshBtn.addEventListener('click', loadDashboard);
+    exportBtn.addEventListener('click', exportReport);
+
+    Promise.all([loadHallNames(), loadDashboard()]);
+    (function setupSidebarToggle() {
+      const layout = document.querySelector('.layout');
+      const toggleButton = document.querySelector('[data-sidebar-toggle]');
+      const overlay = document.querySelector('[data-sidebar-overlay]');
+
+      function setSidebarOpen(isOpen) {
+        if (!layout || !toggleButton) {
+          return;
+        }
+        layout.classList.toggle('sidebar-open', isOpen);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('sidebar-locked', isOpen);
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          const isOpen = layout && layout.classList.contains('sidebar-open');
+          setSidebarOpen(!isOpen);
+        });
+      }
+
+      if (overlay) {
+        overlay.addEventListener('click', () => setSidebarOpen(false));
+      }
+
+      document.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 1200) {
+            setSidebarOpen(false);
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

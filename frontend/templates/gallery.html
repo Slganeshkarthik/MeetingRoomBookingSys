@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Gallery – Meeting Hall Booking System photo gallery and highlights.">
+    <title>{% block title %}{{ config.app_title if config else 'Meeting Hall System' }} - Gallery{% endblock %}</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Dancing+Script:wght@400..700&display=swap" rel="stylesheet">
+
+    <!-- Stylesheet (shared with home) -->
+    <link rel="stylesheet" href="home.css">
+</head>
+<body>
+  <!-- ── Top Bar ── -->
+  <header class="topbar">
+    <div class="brand">
+      <img src="{{ config.app_logo_path if config and config.app_logo_path else '/static/logo.png' }}" alt="Logo" />
+      <h1>{{ config.app_brand if config else 'DSCE' }}</h1>
+    </div>
+    <div class="actions">
+      {% if user %}
+      <button class="iconbtn" onclick="window.location.href='/settings.html'" title="Profile">
+        👤 <span class="username-text">{{ ((user.name or user.username) or '')[0:1] }}</span>
+      </button>
+      <a class="iconbtn" href="/logout" title="Logout">↩ Logout</a>
+      {% else %}
+      <a class="iconbtn" href="/login.html" title="Login">👤 Login</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- ── Navbar ── -->
+  <header class="navbar">
+    <div class="brand">{{ config.app_navbar_brand if config else '📅 MeetBook' }}</div>
+    <nav>
+      <a href="/home.html">Home</a>
+      <a href="/gallery.html" class="active">Gallery</a>
+      {% if user and ((user.role or '')|lower) in ['hod', 'principal', 'secretary'] %}
+      <a href="/approver-dashboard.html">Approvals Dashboard</a>
+      {% elif user and ((user.role or '')|lower) == 'admin' %}
+      <a href="/admin-analytics.html">Admin Analytics</a>
+      {% elif user %}
+      <a href="/requester-dashboard.html">My Dashboard</a>
+      {% else %}
+      <a href="/login.html">Dashboard</a>
+      {% endif %}
+    </nav>
+  </header>
+
+  <!-- ── Slideshow Gallery ── -->
+  <div class="slideshow" id="slideshow" aria-label="Meeting room highlights">
+    <button class="slide-btn prev" onclick="plusSlides(-1)">&#10094;</button>
+
+    <div class="slide-frame">
+      <div class="slide">
+        <img src="/static/image1.png" alt="Meeting Hall 1">
+      </div>
+      <div class="slide">
+        <img src="/static/image2.png" alt="Meeting Hall 2">
+      </div>
+      <div class="slide">
+        <img src="/static/image3.png" alt="Meeting Hall 3">
+      </div>
+      <div class="slide">
+        <img src="/static/image4.png" alt="Meeting Hall 4">
+      </div>
+    </div>
+
+    <div class="slide-copy">
+      <h4>book your meeting room today</h4>
+    </div>
+
+    <button class="slide-btn next" onclick="plusSlides(1)">&#10095;</button>
+  </div>
+
+  <!-- ── Gallery Grid ── -->
+  <section class="gallery-section">
+    <h2 class="gallery-heading">Our Meeting Spaces</h2>
+    <p class="gallery-subtitle">Explore the halls available for booking</p>
+    <div class="gallery-grid" id="galleryGrid">
+      <div class="gallery-card">
+        <img src="/static/image1.png" alt="Meeting Hall 1" loading="lazy">
+        <div class="gallery-card-overlay">
+          <span>Conference Hall</span>
+        </div>
+      </div>
+      <div class="gallery-card">
+        <img src="/static/image2.png" alt="Meeting Hall 2" loading="lazy">
+        <div class="gallery-card-overlay">
+          <span>Seminar Room</span>
+        </div>
+      </div>
+      <div class="gallery-card">
+        <img src="/static/image3.png" alt="Meeting Hall 3" loading="lazy">
+        <div class="gallery-card-overlay">
+          <span>Board Room</span>
+        </div>
+      </div>
+      <div class="gallery-card">
+        <img src="/static/image4.png" alt="Meeting Hall 4" loading="lazy">
+        <div class="gallery-card-overlay">
+          <span>Event Hall</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ── -->
+  <footer>
+    <p>© 2026 {{ config.app_title if config else 'Meeting Hall System' }} | Meeting Room Booking System</p>
+  </footer>
+
+  <!-- ── Lightbox Modal ── -->
+  <div class="lightbox-overlay" id="lightbox" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+    <button class="lightbox-nav prev" onclick="event.stopPropagation(); lightboxNav(-1)">&#10094;</button>
+    <img class="lightbox-img" id="lightboxImg" src="" alt="Gallery image">
+    <button class="lightbox-nav next" onclick="event.stopPropagation(); lightboxNav(1)">&#10095;</button>
+  </div>
+
+  <!-- ── Slideshow Script ── -->
+  <script>
+    let slideIndex = 0;
+    let autoTimer;
+
+    function showSlide(index) {
+      const slides = document.querySelectorAll(".slide");
+      if (!slides.length) return;
+      slideIndex = (index + slides.length) % slides.length;
+      slides.forEach((slide, i) => {
+        slide.style.display = i === slideIndex ? "flex" : "none";
+      });
+    }
+
+    function plusSlides(step) {
+      showSlide(slideIndex + step);
+      restartAutoPlay();
+    }
+
+    function startAutoPlay() {
+      autoTimer = setInterval(() => { showSlide(slideIndex + 1); }, 3500);
+    }
+
+    function restartAutoPlay() {
+      clearInterval(autoTimer);
+      startAutoPlay();
+    }
+
+    // Gallery lightbox
+    let lightboxIndex = 0;
+    const galleryImages = [];
+
+    document.querySelectorAll('.gallery-card img').forEach((img, i) => {
+      galleryImages.push(img.src);
+      img.addEventListener('click', () => openLightbox(i));
+    });
+
+    function openLightbox(idx) {
+      lightboxIndex = idx;
+      const lb = document.getElementById('lightbox');
+      const lbImg = document.getElementById('lightboxImg');
+      lbImg.src = galleryImages[idx];
+      lb.classList.add('active');
+      document.body.style.overflow = 'hidden';
+    }
+
+    function closeLightbox() {
+      document.getElementById('lightbox').classList.remove('active');
+      document.body.style.overflow = '';
+    }
+
+    function lightboxNav(dir) {
+      lightboxIndex = (lightboxIndex + dir + galleryImages.length) % galleryImages.length;
+      document.getElementById('lightboxImg').src = galleryImages[lightboxIndex];
+    }
+
+    document.addEventListener('keydown', (e) => {
+      const lb = document.getElementById('lightbox');
+      if (!lb.classList.contains('active')) return;
+      if (e.key === 'Escape') closeLightbox();
+      if (e.key === 'ArrowLeft') lightboxNav(-1);
+      if (e.key === 'ArrowRight') lightboxNav(1);
+    });
+
+    document.addEventListener("DOMContentLoaded", () => {
+      showSlide(0);
+      startAutoPlay();
+    });
+  </script>
+
+  <!-- ── Gallery-specific Styles ── -->
+  <style>
+    :root {
+      --green: #838589;
+      --green-700: #0a84b8;
+      --light: #f6f7f8;
+      --accent: rgb(228, 182, 31);
+      --text: #111827;
+      --muted: #6b7280;
+      --card: #ffffff;
+      --shadow: 0 6px 20px rgba(0, 0, 0, 0.08);
+      --radius: 16px;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+      color: var(--text);
+      background: var(--light);
+      overflow-x: hidden;
+    }
+
+    /* ── Top Bar ── */
+    .topbar {
+      position: sticky; top: 0; z-index: 50;
+      display: flex; gap: 12px; align-items: center; justify-content: space-between;
+      background: var(--green); color: #fff;
+      padding: 12px 18px;
+      box-shadow: var(--shadow);
+      flex-wrap: wrap;
+    }
+
+    .brand {
+      display: flex; gap: 12px; align-items: center; flex-shrink: 0;
+    }
+
+    .brand img {
+      width: 40px; height: 40px; border-radius: 50%;
+      object-fit: cover; background: #fff;
+    }
+
+    .brand h1 {
+      font-size: 20px; margin: 0; font-weight: 700; letter-spacing: 0.2px;
+    }
+
+    .actions {
+      display: flex; gap: 10px; align-items: center; flex-shrink: 0; justify-content: flex-end;
+    }
+
+    .iconbtn {
+      display: inline-flex; gap: 8px; align-items: center;
+      border: 0; background: #fff; color: var(--green);
+      padding: 10px 14px; border-radius: 999px;
+      cursor: pointer; font-weight: 600; text-decoration: none;
+      font-size: 14px; white-space: nowrap;
+    }
+
+    /* ── Navbar ── */
+    .navbar {
+      display: flex; gap: 12px; align-items: center; justify-content: center;
+      background: var(--green-700); color: #fff;
+      padding: 10px 8px; font-weight: 600; flex-wrap: wrap;
+    }
+
+    .navbar nav {
+      display: flex; gap: 4px; flex-wrap: wrap; justify-content: center;
+    }
+
+    .navbar a {
+      color: #fff; text-decoration: none;
+      padding: 6px 10px; border-radius: 10px; font-size: 14px; white-space: nowrap;
+    }
+
+    .navbar a:hover { background: rgba(255, 255, 255, 0.12); }
+    .navbar a.active { background: rgba(255, 255, 255, 0.2); }
+
+    /* ── Slideshow ── */
+    .slideshow {
+      position: relative;
+      width: min(96%, 1250px);
+      margin: 24px auto;
+      min-height: 460px;
+      padding: 30px 72px;
+      border-radius: 14px;
+      background: #fff;
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 28px;
+    }
+
+    .slide-frame {
+      flex: 0 0 58%; width: 58%; height: 360px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 12px; background: #f7f7f8;
+      box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+      overflow: hidden;
+    }
+
+    .slide {
+      display: none; width: 100%; height: 100%;
+      align-items: center; justify-content: center;
+      animation: fadeIn 0.4s ease;
+    }
+
+    .slide img {
+      width: 100%; height: 100%;
+      object-fit: contain; border-radius: 12px;
+      background: #f7f7f8; display: block;
+      transition: transform 0.2s;
+    }
+
+    .slide img:hover { transform: scale(1.02); }
+
+    .slide-copy {
+      flex: 1; min-width: 200px;
+      display: flex; align-items: center; justify-content: center; text-align: center;
+    }
+
+    .slide-copy h1,
+    .slide-copy h4 {
+      margin: 0;
+      font-family: 'Dancing Script', cursive;
+      font-size: clamp(42px, 4vw, 72px);
+      font-weight: 600; line-height: 1.1; color: #1f2937;
+    }
+
+    .slide-btn {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      border: 0; width: 36px; height: 36px; border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55); color: #fff;
+      cursor: pointer; font-size: 20px; line-height: 1;
+    }
+
+    .slide-btn:hover { background: rgba(0, 0, 0, 0.75); }
+    .slide-btn.prev { left: 16px; }
+    .slide-btn.next { right: 16px; }
+
+    /* ── Gallery Grid ── */
+    .gallery-section {
+      max-width: 1250px;
+      margin: 0 auto 40px;
+      padding: 0 2%;
+    }
+
+    .gallery-heading {
+      text-align: center;
+      font-size: 32px;
+      font-weight: 700;
+      margin: 40px 0 8px;
+      color: var(--text);
+    }
+
+    .gallery-subtitle {
+      text-align: center;
+      font-size: 15px;
+      color: var(--muted);
+      margin: 0 0 28px;
+    }
+
+    .gallery-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .gallery-card {
+      position: relative;
+      border-radius: var(--radius);
+      overflow: hidden;
+      background: #fff;
+      box-shadow: var(--shadow);
+      cursor: pointer;
+      aspect-ratio: 4/3;
+      transition: transform 0.25s ease, box-shadow 0.25s ease;
+    }
+
+    .gallery-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+    }
+
+    .gallery-card img {
+      width: 100%; height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.35s ease;
+    }
+
+    .gallery-card:hover img {
+      transform: scale(1.05);
+    }
+
+    .gallery-card-overlay {
+      position: absolute;
+      bottom: 0; left: 0; right: 0;
+      background: linear-gradient(transparent, rgba(0,0,0,0.7));
+      padding: 24px 16px 14px;
+      display: flex; align-items: flex-end;
+    }
+
+    .gallery-card-overlay span {
+      color: #fff;
+      font-weight: 600;
+      font-size: 16px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ── Footer ── */
+    footer {
+      text-align: center;
+      padding: 24px 16px;
+      background: var(--green);
+      color: #fff;
+      font-size: 14px;
+    }
+
+    footer p { margin: 0; }
+
+    /* ── Lightbox ── */
+    .lightbox-overlay {
+      display: none;
+      position: fixed; inset: 0; z-index: 9999;
+      background: rgba(0, 0, 0, 0.92);
+      align-items: center; justify-content: center;
+    }
+
+    .lightbox-overlay.active {
+      display: flex;
+    }
+
+    .lightbox-img {
+      max-width: 90vw; max-height: 85vh;
+      border-radius: 12px;
+      object-fit: contain;
+      box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+      animation: fadeIn 0.3s ease;
+    }
+
+    .lightbox-close {
+      position: absolute; top: 20px; right: 24px;
+      background: none; border: none;
+      color: #fff; font-size: 36px;
+      cursor: pointer; z-index: 10001;
+      line-height: 1;
+      opacity: 0.8;
+      transition: opacity 0.2s;
+    }
+
+    .lightbox-close:hover { opacity: 1; }
+
+    .lightbox-nav {
+      position: absolute; top: 50%; transform: translateY(-50%);
+      background: rgba(255,255,255,0.15);
+      border: none; color: #fff;
+      width: 44px; height: 44px; border-radius: 50%;
+      font-size: 22px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+      z-index: 10001;
+    }
+
+    .lightbox-nav:hover { background: rgba(255,255,255,0.3); }
+    .lightbox-nav.prev { left: 20px; }
+    .lightbox-nav.next { right: 20px; }
+
+    /* ── Responsive ── */
+    @media (max-width: 980px) {
+      .slideshow {
+        min-height: auto; padding: 22px 54px;
+        flex-direction: column; gap: 20px;
+      }
+      .slide-frame { width: 100%; flex-basis: auto; height: 280px; }
+      .slide-copy h1, .slide-copy h4 { font-size: clamp(28px, 8vw, 44px); }
+    }
+
+    @media (max-width: 768px) {
+      .topbar { padding: 10px 14px; gap: 8px; }
+      .brand h1 { font-size: 17px; }
+      .brand img { width: 34px; height: 34px; }
+      .navbar .brand { display: none; }
+      .navbar a { font-size: 13px; padding: 5px 8px; }
+      .iconbtn { padding: 8px 12px; font-size: 13px; }
+      .gallery-heading { font-size: 26px; }
+    }
+
+    @media (max-width: 640px) {
+      .slideshow { padding: 16px 40px; gap: 14px; margin: 14px auto; }
+      .slide-frame { height: 220px; }
+      .slide-copy { min-width: 0; }
+      .slide-copy h1, .slide-copy h4 { font-size: clamp(22px, 6vw, 32px); }
+      .slide-btn { width: 30px; height: 30px; font-size: 16px; }
+      .slide-btn.prev { left: 6px; }
+      .slide-btn.next { right: 6px; }
+      .gallery-grid { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 480px) {
+      .topbar { padding: 8px 10px; }
+      .brand h1 { font-size: 15px; }
+      .brand img { width: 30px; height: 30px; }
+      .iconbtn { padding: 7px 10px; font-size: 12px; gap: 4px; }
+      .navbar { gap: 4px; padding: 6px 8px; }
+      .navbar a { font-size: 12px; padding: 5px 6px; }
+      .slideshow { padding: 14px 32px; }
+      .slide-frame { height: 180px; }
+      .gallery-heading { font-size: 22px; margin-top: 28px; }
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0.25; }
+      to { opacity: 1; }
+    }
+  </style>
+</body>
+</html>

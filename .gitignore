@@ -1,0 +1,62 @@
+# ── Secrets & environment ──────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ── Python ─────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+pip-wheel-metadata/
+
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+ENV/
+.virtualenv/
+
+# ── Local database dumps (never commit real data) ──────────────────────────
+*.sql
+dataBase/__pycache__/
+
+# ── Uploaded files (runtime data, not source) ──────────────────────────────
+frontend/static/uploads/
+static/uploads/
+
+# ── IDE / editor ───────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ── OS generated ───────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── Logs & debug artifacts ─────────────────────────────────────────────────
+*.log
+*.out
+*.err
+server-admin-analytics.*
+debug_check.py
+debug_email_test.py
+dump_db.py
+
+# ── Docker local ───────────────────────────────────────────────────────────
+# Keep Dockerfile — Render uses it
+# Ignore only local override files
+docker-compose.override.yml
+
+# ── Misc ───────────────────────────────────────────────────────────────────
+file.txt
+user_database_dump.sql
+README_DB_TRANSFER.md

@@ -1,0 +1,1657 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Admin Configuration - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link rel="stylesheet" href="/dashboard.css">
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8e0ec;
+      --line-soft: #ebeff5;
+      --nav: #172033;
+      --blue: #2563eb;
+      --teal: #0f766e;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --violet: #7c3aed;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    select,
+    textarea {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #1f2937;
+      color: white;
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      font-size: 14px;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--nav);
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .sidebar-toggle:hover {
+      background: #f3f4f6;
+      border-color: #cfd8e4;
+    }
+
+    .sidebar-overlay {
+      display: none;
+    }
+
+    body.sidebar-locked {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #374151;
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sidebar-menu a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: #e5e7eb;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      font-size: 14px;
+    }
+
+    .sidebar-menu a:hover {
+      background: #374151;
+      color: #fff;
+    }
+
+    .sidebar-menu a.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .sidebar-menu-section {
+      margin-top: 30px;
+    }
+
+    .sidebar-menu-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: #9ca3af;
+      text-transform: uppercase;
+      padding: 12px 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .heading h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .heading p {
+      margin: 8px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      width: auto;
+      min-height: 38px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 8px 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary,
+    .btn-save {
+      background: var(--nav);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.14);
+    }
+
+    .btn-secondary {
+      background: #fff;
+      color: var(--nav);
+      border-color: var(--line);
+    }
+
+    .btn-danger {
+      background: #fee2e2;
+      color: var(--red);
+      border-color: #fecaca;
+    }
+
+    .btn-small {
+      min-height: 32px;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+
+    .btn-icon {
+      min-width: 38px;
+      padding: 8px 10px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .summary-card,
+    .config-section {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card {
+      padding: 14px;
+      min-height: 106px;
+      border-top: 4px solid var(--blue);
+    }
+
+    .summary-card.teal {
+      border-top-color: var(--teal);
+    }
+
+    .summary-card.green {
+      border-top-color: var(--green);
+    }
+
+    .summary-card.violet {
+      border-top-color: var(--violet);
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+
+    .summary-value {
+      color: var(--nav);
+      font-size: 25px;
+      font-weight: 900;
+      line-height: 1.05;
+      margin-bottom: 7px;
+      word-break: break-word;
+    }
+
+    .summary-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .status-anchor {
+      min-height: 1px;
+    }
+
+    .status-message {
+      margin-bottom: 14px;
+      padding: 12px 14px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .status-success {
+      background: #dcfce7;
+      color: #166534;
+      border-color: #bbf7d0;
+    }
+
+    .status-error {
+      background: #fee2e2;
+      color: #991b1b;
+      border-color: #fecaca;
+    }
+
+    .status-info {
+      background: #eef4ff;
+      color: #1d4ed8;
+      border-color: #c7d7fe;
+    }
+
+    .content-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(340px, 0.75fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .config-section {
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .section-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .section-head h2 {
+      margin: 0;
+      color: var(--nav);
+      font-size: 17px;
+      font-weight: 900;
+    }
+
+    .section-head p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .config-group {
+      display: grid;
+      gap: 12px;
+    }
+
+    .config-item {
+      display: grid;
+      grid-template-columns: 170px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 12px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .config-label {
+      color: #344054;
+      font-size: 13px;
+      font-weight: 900;
+      padding-top: 9px;
+    }
+
+    .config-control {
+      min-width: 0;
+    }
+
+    .config-input-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .config-item input[type="text"],
+    .config-item input[type="password"],
+    .config-item textarea,
+    .panel-input,
+    .hall-editor-grid input,
+    .hall-editor-grid select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    .config-item input:focus,
+    .config-item textarea:focus,
+    .panel-input:focus,
+    .hall-editor-grid input:focus,
+    .hall-editor-grid select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .config-item textarea {
+      min-height: 70px;
+      resize: vertical;
+    }
+
+    .info-text {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 5px;
+    }
+
+    .logo-panel {
+      display: grid;
+      grid-template-columns: 112px minmax(0, 1fr);
+      gap: 14px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+      background: var(--panel-soft);
+    }
+
+    .logo-preview {
+      width: 96px;
+      height: 96px;
+      object-fit: contain;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 7px;
+    }
+
+    .logo-upload-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .logo-upload-row input[type="file"],
+    .hall-editor-grid input[type="file"] {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px;
+      background: #fff;
+    }
+
+    .hall-editor-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .hall-editor-grid .wide {
+      grid-column: span 2;
+    }
+
+    .hall-actions,
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .toolbar {
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .toolbar-left,
+    .toolbar-right {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    .toolbar .panel-input {
+      width: min(340px, 100%);
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      border: 1px solid var(--line-soft);
+      border-radius: 8px;
+    }
+
+    .table-config {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+    }
+
+    .table-config th,
+    .table-config td {
+      padding: 11px 10px;
+      border-bottom: 1px solid var(--line-soft);
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    .table-config th {
+      color: #475467;
+      background: var(--panel-soft);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .table-config tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .config-key {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 6px;
+      padding: 4px 7px;
+      background: #f2f4f7;
+      color: #344054;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .value-preview {
+      max-width: 520px;
+      color: #344054;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .action-buttons {
+      display: flex;
+      gap: 7px;
+      justify-content: flex-end;
+      flex-wrap: wrap;
+    }
+
+    .hall-active,
+    .hall-inactive {
+      display: inline-flex;
+      min-height: 24px;
+      align-items: center;
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+
+    .hall-active {
+      background: #dcfce7;
+      color: #166534;
+    }
+
+    .hall-inactive {
+      background: #f2f4f7;
+      color: #667085;
+    }
+
+    .loading {
+      opacity: 0.65;
+      cursor: not-allowed;
+    }
+
+    .full-span {
+      grid-column: 1 / -1;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: #111827;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+
+    @media (max-width: 1180px) {
+      .summary-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .content-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1001;
+      }
+
+      .layout.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 1000;
+      }
+
+      .layout.sidebar-open .sidebar-overlay {
+        display: block;
+      }
+
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .main {
+        padding: 16px;
+      }
+
+      .topbar {
+        flex-direction: column;
+      }
+
+      .top-actions {
+        width: 100%;
+      }
+
+      .top-actions .btn,
+      .hall-actions .btn,
+      .logo-upload-row .btn {
+        flex: 1;
+      }
+
+      .heading h1 {
+        font-size: 26px;
+      }
+
+      .summary-grid,
+      .hall-editor-grid,
+      .config-item,
+      .logo-panel {
+        grid-template-columns: 1fr;
+      }
+
+      .hall-editor-grid .wide {
+        grid-column: auto;
+      }
+
+      .config-label {
+        padding-top: 0;
+      }
+
+      .config-input-group,
+      .logo-upload-row {
+        flex-wrap: wrap;
+      }
+
+      .toolbar {
+        align-items: stretch;
+      }
+
+      .toolbar,
+      .toolbar-left,
+      .toolbar-right {
+        flex-direction: column;
+      }
+
+      .toolbar .panel-input,
+      .toolbar .btn {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main {
+        padding: 12px;
+      }
+
+      .heading h1 {
+        font-size: 22px;
+      }
+
+      .heading p {
+        font-size: 12px;
+      }
+
+      .summary-card {
+        padding: 12px;
+        min-height: 88px;
+      }
+
+      .summary-value {
+        font-size: 20px;
+      }
+
+      .summary-label {
+        font-size: 10px;
+      }
+
+      .config-section {
+        padding: 12px;
+      }
+
+      .section-head h2 {
+        font-size: 15px;
+      }
+
+      .config-item {
+        padding: 10px;
+      }
+
+      .config-label {
+        font-size: 12px;
+      }
+
+      .table-config th,
+      .table-config td {
+        padding: 8px 6px;
+        font-size: 12px;
+      }
+
+      .action-buttons {
+        flex-direction: column;
+      }
+
+      .action-buttons .btn {
+        width: 100%;
+      }
+
+      .logo-preview {
+        width: 72px;
+        height: 72px;
+      }
+
+      .btn {
+        min-height: 34px;
+        font-size: 12px;
+        padding: 6px 10px;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span style="font-size: 24px;">⚙️</span>
+        <h2>Admin Panel</h2>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="/admin-dashboard.html">📊 Dashboard</a>
+        <a href="/admin-analytics.html">📈 Analytics</a>
+        <a href="/admin-config.html" class="active">⚙️ Configuration</a>
+        <a href="/admin-mail-health.html">📧 Mail Health</a>
+      </nav>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">Management</div>
+        <nav class="sidebar-menu">
+          <a href="/admin-dashboard.html#approvals">✅ Approver Accounts</a>
+          <a href="/admin-dashboard.html#users">👥 Users</a>
+          <a href="#roomConf">🏢 Meeting Rooms</a>
+          <a href="/admin-analytics.html">📋 Reports</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">System</div>
+        <nav class="sidebar-menu">
+          <a href="#allConfigs">💾 Configuration Keys</a>
+          <a href="/admin-dashboard.html#logs">📝 Logs</a>
+          <a href="/logout" style="color: #ef4444;">🚪 Logout</a>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-overlay></div>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="heading">
+          <h1>System Configuration</h1>
+          <p>Branding, access, mail sender credentials, meeting rooms, and raw configuration keys.</p>
+        </div>
+        <div class="top-actions">
+          <button class="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-sidebar-toggle>⋮</button>
+          <button class="btn btn-secondary" type="button" onclick="loadConfigs()">Refresh Config</button>
+          <button class="btn btn-primary" type="button" onclick="loadHalls()">Refresh Rooms</button>
+        </div>
+      </div>
+
+      <section class="summary-grid" aria-label="Configuration summary">
+        <div class="summary-card">
+          <div class="summary-label">Brand</div>
+          <div class="summary-value" id="brandSummary">{{ config.app_brand if config else 'DSCE' }}</div>
+          <div class="summary-note" id="titleSummary">{{ config.app_title if config else 'Meeting Hall System' }}</div>
+        </div>
+        <div class="summary-card teal">
+          <div class="summary-label">Mail Sender</div>
+          <div class="summary-value" id="mailSummary">-</div>
+          <div class="summary-note">System email setting</div>
+        </div>
+        <div class="summary-card green">
+          <div class="summary-label">Rooms</div>
+          <div class="summary-value" id="roomsSummary">0</div>
+          <div class="summary-note" id="roomsSummaryNote">Loading rooms</div>
+        </div>
+        <div class="summary-card violet">
+          <div class="summary-label">Config Keys</div>
+          <div class="summary-value" id="configSummary">0</div>
+          <div class="summary-note">Loaded settings</div>
+        </div>
+      </section>
+
+      <div id="statusMessage" class="status-anchor"></div>
+
+      <section id="branding" class="content-grid">
+        <div class="config-section">
+          <div class="section-head">
+            <div>
+              <h2>Application Branding</h2>
+              <p>Visible identity across the admin and booking experience.</p>
+            </div>
+            <span class="pill">Branding</span>
+          </div>
+
+          <div class="config-group">
+            <div class="config-item">
+              <label class="config-label" for="app_title">App Title</label>
+              <div class="config-control">
+                <div class="config-input-group">
+                  <input type="text" id="app_title" placeholder="Meeting Hall System">
+                  <button class="btn btn-save" type="button" onclick="saveConfig('app_title')">Save</button>
+                </div>
+                <div class="info-text">Browser tab and page title.</div>
+              </div>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label" for="app_brand">Brand Name</label>
+              <div class="config-control">
+                <div class="config-input-group">
+                  <input type="text" id="app_brand" placeholder="DSCE">
+                  <button class="btn btn-save" type="button" onclick="saveConfig('app_brand')">Save</button>
+                </div>
+                <div class="info-text">Primary organization mark.</div>
+              </div>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label" for="app_navbar_brand">Navbar Brand</label>
+              <div class="config-control">
+                <div class="config-input-group">
+                  <input type="text" id="app_navbar_brand" placeholder="MeetBook">
+                  <button class="btn btn-save" type="button" onclick="saveConfig('app_navbar_brand')">Save</button>
+                </div>
+                <div class="info-text">Short name used in navigation.</div>
+              </div>
+            </div>
+
+            <div class="config-item">
+              <label class="config-label" for="organization_name">Organization</label>
+              <div class="config-control">
+                <div class="config-input-group">
+                  <input type="text" id="organization_name" placeholder="Institution name">
+                  <button class="btn btn-save" type="button" onclick="saveConfig('organization_name')">Save</button>
+                </div>
+                <div class="info-text">Institution or department name.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="config-section">
+          <div class="section-head">
+            <div>
+              <h2>Logo</h2>
+              <p>PNG, JPG, WEBP, or GIF.</p>
+            </div>
+            <span class="pill">Asset</span>
+          </div>
+
+          <div class="logo-panel">
+            <img id="logoPreview" class="logo-preview" src="{{ config.app_logo_path if config and config.app_logo_path else '/static/logo.png' }}" alt="Logo Preview">
+            <div>
+              <div class="logo-upload-row">
+                <input type="file" id="logoFile" accept="image/png,image/jpeg,image/webp,image/gif">
+                <button class="btn btn-save" type="button" onclick="uploadLogo()">Upload</button>
+              </div>
+              <div class="info-text">The preview updates as soon as a local file is selected.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="security" class="config-section" style="margin-bottom:14px;">
+        <div class="section-head">
+          <div>
+            <h2>Security & Access</h2>
+            <p>Admin login, OTP target, and SMTP sender credentials.</p>
+          </div>
+          <span class="pill">Access</span>
+        </div>
+
+        <div class="config-group">
+          <div class="config-item">
+            <label class="config-label" for="admin_username">Admin Username</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="admin_username" placeholder="admin">
+                <button class="btn btn-save" type="button" onclick="saveConfig('admin_username')">Save</button>
+              </div>
+              <div class="info-text">Username for admin login.</div>
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label class="config-label" for="admin_password">Admin Password</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="password" id="admin_password" placeholder="Password">
+                <button class="btn btn-secondary btn-icon" type="button" onclick="togglePassword('admin_password', this)" aria-label="Show admin password">Show</button>
+                <button class="btn btn-save" type="button" onclick="saveConfig('admin_password')">Save</button>
+              </div>
+              <div class="info-text">Password used by the admin account.</div>
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label class="config-label" for="admin_otp_email">Admin OTP Email</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="admin_otp_email" placeholder="admin@example.edu">
+                <button class="btn btn-save" type="button" onclick="saveConfig('admin_otp_email')">Save</button>
+              </div>
+              <div class="info-text">OTP delivery address for admin login.</div>
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label class="config-label" for="system_email">System Email</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="system_email" placeholder="booking@example.edu">
+                <button class="btn btn-save" type="button" onclick="saveConfig('system_email')">Save</button>
+              </div>
+              <div class="info-text">Sender address for application notifications.</div>
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label class="config-label" for="smtp_password">SMTP Password</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="password" id="smtp_password" placeholder="SMTP app password">
+                <button class="btn btn-secondary btn-icon" type="button" onclick="togglePassword('smtp_password', this)" aria-label="Show SMTP password">Show</button>
+                <button class="btn btn-save" type="button" onclick="saveConfig('smtp_password')">Save</button>
+              </div>
+              <div class="info-text">SMTP password used for mail delivery.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="approvalFlow" class="config-section" style="margin-bottom:14px;">
+        <div class="section-head">
+          <div>
+            <h2>Approval Flow</h2>
+            <p>Customize the sequence of approver roles.</p>
+          </div>
+          <span class="pill">Workflow</span>
+        </div>
+
+        <div class="config-group">
+          <div class="config-item">
+            <label class="config-label" for="approval_flow">Role Sequence</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="approval_flow" placeholder="HOD,Principal,Secretary">
+                <button class="btn btn-save" type="button" onclick="saveConfig('approval_flow')">Save</button>
+              </div>
+              <div class="info-text">Comma-separated list of roles in order. Example: <code>HOD,Principal,Secretary</code>. To skip all approvals, leave blank.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="roomConf" class="config-section" style="margin-bottom:14px;">
+        <div class="section-head">
+          <div>
+            <h2>Meeting Rooms Management</h2>
+            <p>Add rooms or edit an existing room by entering the same room number.</p>
+          </div>
+          <span class="pill" id="roomCountPill">0 rooms</span>
+        </div>
+
+        <div class="hall-editor-grid">
+          <input type="number" id="hall_room_no" min="1" placeholder="Room No">
+          <input class="wide" type="text" id="hall_name" placeholder="Hall Name">
+          <input type="number" id="hall_capacity" min="1" placeholder="Capacity">
+          <input type="number" id="hall_min_capacity" min="0" placeholder="Minimum Capacity">
+          <select id="hall_is_active">
+            <option value="true">Active</option>
+            <option value="false">Inactive</option>
+          </select>
+          <input class="full-span" type="file" id="hall_image" accept="image/*">
+        </div>
+
+        <div class="hall-actions" style="margin-bottom:12px;">
+          <button class="btn btn-save" type="button" onclick="saveHall()">Save Room</button>
+          <button class="btn btn-secondary" type="button" onclick="clearHallForm()">Clear</button>
+          <button class="btn btn-secondary" type="button" onclick="loadHalls()">Refresh Rooms</button>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <input class="panel-input" type="search" id="roomSearchInput" placeholder="Search rooms">
+          </div>
+          <div class="toolbar-right">
+            <span class="pill" id="visibleRoomsPill">0 shown</span>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table-config">
+            <thead>
+              <tr>
+                <th>Room No</th>
+                <th>Hall Name</th>
+                <th>Capacity</th>
+                <th>Min Capacity</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="hallsTable">
+              <tr>
+                <td colspan="6" style="text-align:center;color:#8a95a6;">Loading rooms...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="allConfigs" class="config-section">
+        <div class="section-head">
+          <div>
+            <h2>All Configurations</h2>
+            <p>Raw key/value settings loaded from the application configuration table.</p>
+          </div>
+          <span class="pill" id="configCountPill">0 keys</span>
+        </div>
+
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <input class="panel-input" type="search" id="configSearchInput" placeholder="Search configuration keys">
+          </div>
+          <div class="toolbar-right">
+            <button class="btn btn-secondary" type="button" onclick="loadConfigs()">Refresh</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table class="table-config">
+            <thead>
+              <tr>
+                <th>Configuration Key</th>
+                <th>Current Value</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="configTable">
+              <tr>
+                <td colspan="3" style="text-align:center;color:#8a95a6;">Loading configurations...</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+  <script>
+    let hallsCache = [];
+    let configCache = {};
+    let logoPreviewUrl = null;
+
+    document.addEventListener('DOMContentLoaded', function () {
+      loadConfigs();
+      loadHalls();
+
+      const roomSearchInput = document.getElementById('roomSearchInput');
+      const configSearchInput = document.getElementById('configSearchInput');
+      const logoFile = document.getElementById('logoFile');
+
+      if (roomSearchInput) {
+        roomSearchInput.addEventListener('input', renderHalls);
+      }
+      if (configSearchInput) {
+        configSearchInput.addEventListener('input', () => populateConfigTable(configCache));
+      }
+      if (logoFile) {
+        logoFile.addEventListener('change', previewSelectedLogo);
+      }
+    });
+
+    (function setupSidebarToggle() {
+      const layout = document.querySelector('.layout');
+      const toggleButton = document.querySelector('[data-sidebar-toggle]');
+      const overlay = document.querySelector('[data-sidebar-overlay]');
+
+      function setSidebarOpen(isOpen) {
+        if (!layout || !toggleButton) {
+          return;
+        }
+        layout.classList.toggle('sidebar-open', isOpen);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('sidebar-locked', isOpen);
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          const isOpen = layout && layout.classList.contains('sidebar-open');
+          setSidebarOpen(!isOpen);
+        });
+      }
+
+      if (overlay) {
+        overlay.addEventListener('click', () => setSidebarOpen(false));
+      }
+
+      document.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 960) {
+            setSidebarOpen(false);
+          }
+        });
+      });
+    })();
+
+    async function loadConfigs() {
+      try {
+        const response = await fetch('/api/admin/config', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          configCache = data.config || {};
+          Object.keys(configCache).forEach(key => {
+            const element = document.getElementById(key);
+            if (element) {
+              element.value = configCache[key] || '';
+            }
+          });
+
+          populateConfigTable(configCache);
+          updateConfigSummary(configCache);
+        } else {
+          showStatus('Error loading configurations: ' + (data.error || 'Unknown error'), 'error');
+        }
+      } catch (error) {
+        showStatus('Failed to load configurations: ' + error.message, 'error');
+      }
+    }
+
+    function updateConfigSummary(config) {
+      const keyCount = Object.keys(config || {}).length;
+      setText('configSummary', keyCount);
+      setText('configCountPill', keyCount + ' keys');
+      setText('brandSummary', config.app_brand || '-');
+      setText('titleSummary', config.app_title || '-');
+      setText('mailSummary', config.system_email || '-');
+    }
+
+    function populateConfigTable(config) {
+      const tbody = document.getElementById('configTable');
+      const searchInput = document.getElementById('configSearchInput');
+      const query = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+      tbody.innerHTML = '';
+
+      const entries = Object.keys(config || {})
+        .filter(key => {
+          if (!query) return true;
+          return key.toLowerCase().includes(query) || String(config[key] || '').toLowerCase().includes(query);
+        })
+        .sort((a, b) => a.localeCompare(b));
+
+      if (entries.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#8a95a6;">No configuration keys found.</td></tr>';
+        return;
+      }
+
+      entries.forEach(key => {
+        const value = String(config[key] || '');
+        const isPassword = key.toLowerCase().includes('password');
+        const displayValue = isPassword ? '********' : value;
+        const row = document.createElement('tr');
+
+        const keyCell = document.createElement('td');
+        const keyBadge = document.createElement('span');
+        keyBadge.className = 'config-key';
+        keyBadge.textContent = key;
+        keyCell.appendChild(keyBadge);
+
+        const valueCell = document.createElement('td');
+        const preview = document.createElement('div');
+        preview.className = 'value-preview';
+        preview.textContent = trimValue(displayValue);
+        valueCell.appendChild(preview);
+
+        const actionCell = document.createElement('td');
+        actionCell.className = 'action-buttons';
+        const editButton = document.createElement('button');
+        editButton.className = 'btn btn-small btn-secondary';
+        editButton.type = 'button';
+        editButton.textContent = 'Edit';
+        editButton.addEventListener('click', () => editConfig(key));
+        actionCell.appendChild(editButton);
+
+        row.appendChild(keyCell);
+        row.appendChild(valueCell);
+        row.appendChild(actionCell);
+        tbody.appendChild(row);
+      });
+    }
+
+    function trimValue(value) {
+      const text = String(value || '');
+      return text.length > 70 ? text.slice(0, 70) + '...' : text;
+    }
+
+    async function saveConfig(key) {
+      const element = document.getElementById(key);
+      if (!element) {
+        showStatus('Configuration element not found', 'error');
+        return;
+      }
+
+      await saveConfigValue(key, element.value.trim(), element);
+    }
+
+    async function saveConfigValue(key, value, sourceElement) {
+      if (!value) {
+        showStatus('Please enter a value for ' + key, 'error');
+        return false;
+      }
+
+      try {
+        if (sourceElement) {
+          sourceElement.disabled = true;
+          sourceElement.classList.add('loading');
+        }
+
+        const response = await fetch(`/api/admin/config/${encodeURIComponent(key)}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            config_value: value
+          })
+        });
+
+        const data = await response.json();
+
+        if (data.ok) {
+          showStatus('Configuration saved successfully: ' + key, 'success');
+          await loadConfigs();
+          return true;
+        }
+
+        showStatus('Error saving configuration: ' + (data.error || 'Unknown error'), 'error');
+        return false;
+      } catch (error) {
+        showStatus('Failed to save configuration: ' + error.message, 'error');
+        return false;
+      } finally {
+        if (sourceElement) {
+          sourceElement.disabled = false;
+          sourceElement.classList.remove('loading');
+        }
+      }
+    }
+
+    function editConfig(key) {
+      const field = document.getElementById(key);
+      if (field) {
+        field.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        field.focus();
+        showStatus('Editing ' + key + ' in the matching section.', 'info');
+        return;
+      }
+
+      const currentValue = String(configCache[key] || '');
+      const nextValue = window.prompt('Update value for ' + key, currentValue);
+      if (nextValue === null) {
+        return;
+      }
+      saveConfigValue(key, nextValue.trim(), null);
+    }
+
+    function togglePassword(inputId, button) {
+      const input = document.getElementById(inputId);
+      if (!input) {
+        return;
+      }
+      const isHidden = input.type === 'password';
+      input.type = isHidden ? 'text' : 'password';
+      button.textContent = isHidden ? 'Hide' : 'Show';
+      button.setAttribute('aria-label', (isHidden ? 'Hide ' : 'Show ') + inputId.replace(/_/g, ' '));
+    }
+
+    function previewSelectedLogo() {
+      const fileInput = document.getElementById('logoFile');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        return;
+      }
+
+      if (logoPreviewUrl) {
+        URL.revokeObjectURL(logoPreviewUrl);
+      }
+      logoPreviewUrl = URL.createObjectURL(file);
+      document.getElementById('logoPreview').src = logoPreviewUrl;
+    }
+
+    async function uploadLogo() {
+      const fileInput = document.getElementById('logoFile');
+      const file = fileInput.files && fileInput.files[0];
+      if (!file) {
+        showStatus('Please choose a logo file before uploading.', 'error');
+        return;
+      }
+
+      const payload = new FormData();
+      payload.append('logo', file);
+
+      try {
+        const response = await fetch('/api/admin/logo', {
+          method: 'POST',
+          body: payload,
+        });
+
+        const data = await response.json();
+        if (!data.ok) {
+          showStatus('Error uploading logo: ' + (data.error || 'Unknown error'), 'error');
+          return;
+        }
+
+        const logoUrl = data.logo_url + '?t=' + Date.now();
+        document.getElementById('logoPreview').src = logoUrl;
+        showStatus('Logo updated successfully', 'success');
+        await loadConfigs();
+      } catch (error) {
+        showStatus('Failed to upload logo: ' + error.message, 'error');
+      }
+    }
+
+    async function loadHalls() {
+      const tbody = document.getElementById('hallsTable');
+      if (!tbody) {
+        return;
+      }
+
+      try {
+        const response = await fetch('/api/admin/halls', {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json'
+          }
+        });
+        const data = await response.json();
+
+        if (!response.ok || !Array.isArray(data)) {
+          tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#b91c1c;">Failed to load rooms.</td></tr>';
+          return;
+        }
+
+        hallsCache = data;
+        renderHalls();
+        updateRoomSummary();
+      } catch (error) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#b91c1c;">Failed to load rooms.</td></tr>';
+      }
+    }
+
+    function updateRoomSummary() {
+      const total = Array.isArray(hallsCache) ? hallsCache.length : 0;
+      const active = hallsCache.filter(hall => !!hall.is_active).length;
+      setText('roomsSummary', total);
+      setText('roomsSummaryNote', active + ' active rooms');
+      setText('roomCountPill', total + ' rooms');
+    }
+
+    function renderHalls() {
+      const tbody = document.getElementById('hallsTable');
+      const searchInput = document.getElementById('roomSearchInput');
+      if (!tbody) {
+        return;
+      }
+
+      const query = String(searchInput ? searchInput.value : '').trim().toLowerCase();
+      const filtered = (Array.isArray(hallsCache) ? hallsCache : []).filter(hall => {
+        if (!query) return true;
+        return String(hall.room_no || '').toLowerCase().includes(query)
+          || String(hall.hall_name || '').toLowerCase().includes(query)
+          || String(hall.capacity || '').toLowerCase().includes(query);
+      });
+
+      setText('visibleRoomsPill', filtered.length + ' shown');
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:#8a95a6;">No rooms match the current search.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = filtered.map(hall => {
+        const statusText = hall.is_active ? 'Active' : 'Inactive';
+        const statusClass = hall.is_active ? 'hall-active' : 'hall-inactive';
+        return `
+          <tr>
+            <td><strong>${escapeHtml(String(hall.room_no || ''))}</strong></td>
+            <td>${escapeHtml(hall.hall_name || '')}</td>
+            <td>${escapeHtml(String(hall.capacity || ''))}</td>
+            <td>${escapeHtml(String(hall.min_capacity ?? ''))}</td>
+            <td><span class="${statusClass}">${statusText}</span></td>
+            <td class="action-buttons">
+              <button class="btn btn-small btn-secondary" type="button" onclick="editHall(${Number(hall.room_no)})">Edit</button>
+              <button class="btn btn-small btn-danger" type="button" onclick="deleteHall(${Number(hall.room_no)})">Delete</button>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function editHall(roomNo) {
+      const hall = hallsCache.find(h => Number(h.room_no) === Number(roomNo));
+      if (!hall) {
+        showStatus('Room not found in list', 'error');
+        return;
+      }
+
+      document.getElementById('hall_room_no').value = hall.room_no || '';
+      document.getElementById('hall_name').value = hall.hall_name || '';
+      document.getElementById('hall_capacity').value = hall.capacity || '';
+      document.getElementById('hall_min_capacity').value = hall.min_capacity ?? '';
+      document.getElementById('hall_is_active').value = hall.is_active ? 'true' : 'false';
+      document.getElementById('roomConf').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      showStatus('Editing room ' + hall.room_no + '. Update values and save.', 'info');
+    }
+
+    function clearHallForm() {
+      document.getElementById('hall_room_no').value = '';
+      document.getElementById('hall_name').value = '';
+      document.getElementById('hall_capacity').value = '';
+      document.getElementById('hall_min_capacity').value = '';
+      document.getElementById('hall_is_active').value = 'true';
+      document.getElementById('hall_image').value = '';
+    }
+
+    async function saveHall() {
+      const roomNo = document.getElementById('hall_room_no').value.trim();
+      const hallName = document.getElementById('hall_name').value.trim();
+      const capacity = document.getElementById('hall_capacity').value.trim();
+      const minCapacity = document.getElementById('hall_min_capacity').value.trim();
+      const isActive = document.getElementById('hall_is_active').value;
+
+      if (!roomNo || !capacity || minCapacity === '') {
+        showStatus('Room No, Capacity, and Minimum Capacity are required for room configuration.', 'error');
+        return;
+      }
+
+      if (Number(minCapacity) > Number(capacity)) {
+        showStatus('Minimum Capacity cannot be greater than Capacity.', 'error');
+        return;
+      }
+
+      const formData = new FormData();
+      formData.append('room_no', roomNo);
+      formData.append('hall_name', hallName);
+      formData.append('capacity', capacity);
+      formData.append('min_capacity', minCapacity);
+      formData.append('is_active', isActive);
+
+      const fileInput = document.getElementById('hall_image');
+      if (fileInput.files.length > 0) {
+        formData.append('hall_image', fileInput.files[0]);
+      }
+
+      try {
+        const response = await fetch('/api/admin/halls', {
+          method: 'POST',
+          headers: {
+            'Accept': 'application/json'
+          },
+          body: formData
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          showStatus('Error saving room: ' + (data.error || 'Unknown error'), 'error');
+          return;
+        }
+
+        showStatus('Room configuration saved successfully.', 'success');
+        clearHallForm();
+        await loadHalls();
+      } catch (error) {
+        showStatus('Failed to save room: ' + error.message, 'error');
+      }
+    }
+
+    async function deleteHall(roomNo) {
+      if (!confirm('Delete room ' + roomNo + '? This will permanently remove it from the database.')) {
+        return;
+      }
+      try {
+        const response = await fetch('/api/admin/halls', {
+          method: 'DELETE',
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          },
+          body: JSON.stringify({ room_no: Number(roomNo), hard: true })
+        });
+        const data = await response.json();
+        if (!response.ok) {
+          showStatus('Error deleting room: ' + (data.error || 'Unknown error'), 'error');
+          return;
+        }
+        showStatus('Room permanently deleted.', 'success');
+        await loadHalls();
+      } catch (err) {
+        showStatus('Failed to delete room: ' + err.message, 'error');
+      }
+    }
+
+    function showStatus(message, type) {
+      const statusDiv = document.getElementById('statusMessage');
+      statusDiv.innerHTML = `<div class="status-message status-${type}" role="alert">${escapeHtml(message)}</div>`;
+
+      if (type === 'success') {
+        setTimeout(() => {
+          statusDiv.innerHTML = '';
+        }, 5000);
+      }
+    }
+
+    function setText(id, value) {
+      const element = document.getElementById(id);
+      if (element) {
+        element.textContent = value;
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+  </script>
+</body>
+
+</html>

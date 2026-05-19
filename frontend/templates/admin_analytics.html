@@ -1,0 +1,1740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Admin Analytics - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8e0ec;
+      --line-soft: #ebeff5;
+      --nav: #172033;
+      --blue: #2563eb;
+      --teal: #0f766e;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --violet: #7c3aed;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #1f2937;
+      color: white;
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      font-size: 14px;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--nav);
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .sidebar-toggle:hover {
+      background: #f3f4f6;
+      border-color: #cfd8e4;
+    }
+
+    .sidebar-overlay {
+      display: none;
+    }
+
+    body.sidebar-locked {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #374151;
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: bold;
+      color: #fff;
+    }
+
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sidebar-menu a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: #e5e7eb;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      font-size: 14px;
+    }
+
+    .sidebar-menu a:hover {
+      background: #374151;
+      color: #fff;
+    }
+
+    .sidebar-menu a.active {
+      background: #3b82f6;
+      color: white;
+    }
+
+    .sidebar-menu-section {
+      margin-top: 30px;
+    }
+
+    .sidebar-menu-title {
+      font-size: 11px;
+      font-weight: bold;
+      color: #9ca3af;
+      text-transform: uppercase;
+      padding: 12px 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .heading h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .heading p {
+      margin: 8px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .top-actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .btn {
+      width: auto;
+      min-height: 40px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 9px 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 900;
+      transition: transform 0.14s ease, box-shadow 0.14s ease, background 0.14s ease;
+    }
+
+    .btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-dark {
+      background: var(--nav);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.16);
+    }
+
+    .btn-light {
+      background: #fff;
+      color: var(--nav);
+      border-color: var(--line);
+    }
+
+    .filter-panel,
+    .metric-card,
+    .chart-card,
+    .table-card,
+    .progress-card,
+    .activity-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .filter-panel {
+      padding: 14px;
+      margin-bottom: 14px;
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: repeat(8, minmax(0, 1fr));
+      gap: 10px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin: 0 0 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: var(--text);
+      background: #fff;
+      outline: none;
+    }
+
+    .field input:focus,
+    .field select:focus {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+    }
+
+    .status-line {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+      min-height: 18px;
+    }
+
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .metric-card {
+      min-height: 112px;
+      padding: 14px;
+      border-top: 4px solid var(--blue);
+      overflow: hidden;
+    }
+
+    .metric-card.success {
+      border-top-color: var(--green);
+    }
+
+    .metric-card.danger {
+      border-top-color: var(--red);
+    }
+
+    .metric-card.warn {
+      border-top-color: var(--amber);
+    }
+
+    .metric-card.teal {
+      border-top-color: var(--teal);
+    }
+
+    .metric-card.violet {
+      border-top-color: var(--violet);
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      margin-bottom: 9px;
+    }
+
+    .metric-value {
+      color: var(--nav);
+      font-size: 27px;
+      font-weight: 900;
+      line-height: 1.05;
+      margin-bottom: 7px;
+      word-break: break-word;
+    }
+
+    .metric-note {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }
+
+    .chart-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, 0.65fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .wide-grid,
+    .table-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .chart-card,
+    .table-card,
+    .progress-card,
+    .activity-card {
+      min-width: 0;
+      padding: 16px;
+    }
+
+    .card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .card-title {
+      margin: 0;
+      color: var(--nav);
+      font-size: 16px;
+      font-weight: 900;
+    }
+
+    .card-subtitle {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 26px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #eef4ff;
+      color: #1d4ed8;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .chart-shell {
+      position: relative;
+      width: 100%;
+      min-height: 312px;
+    }
+
+    .chart-shell.small {
+      min-height: 248px;
+    }
+
+    .chart-shell.donut {
+      min-height: 270px;
+      max-width: 420px;
+      margin: 0 auto;
+    }
+
+    .room-list,
+    .activity-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .room-row {
+      display: grid;
+      grid-template-columns: minmax(140px, 0.8fr) minmax(0, 1.2fr) 82px;
+      gap: 12px;
+      align-items: center;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .room-row:last-child {
+      border-bottom: 0;
+    }
+
+    .room-name {
+      color: var(--nav);
+      font-weight: 900;
+      line-height: 1.25;
+    }
+
+    .room-meta,
+    .activity-meta {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      margin-top: 3px;
+    }
+
+    .track {
+      height: 9px;
+      background: #e7edf5;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .fill {
+      width: 0;
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--blue), var(--teal));
+    }
+
+    .heatmap-wrap,
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    .heatmap {
+      min-width: 760px;
+      display: grid;
+      grid-template-columns: 82px repeat(17, 38px);
+      gap: 5px;
+      align-items: center;
+    }
+
+    .heat-cell,
+    .heat-head,
+    .heat-day {
+      min-height: 30px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      font-size: 11px;
+      font-weight: 900;
+    }
+
+    .heat-head,
+    .heat-day {
+      color: #667085;
+      background: var(--panel-soft);
+      border: 1px solid var(--line);
+    }
+
+    .heat-cell {
+      color: #101828;
+      border: 1px solid rgba(16, 24, 40, 0.08);
+      background: #eff6ff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    th,
+    td {
+      text-align: left;
+      padding: 10px 8px;
+      border-bottom: 1px solid var(--line-soft);
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      color: #475467;
+      background: var(--panel-soft);
+      font-size: 11px;
+      font-weight: 900;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .status-chip {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 4px 8px;
+      border: 1px solid #e4e7ec;
+      background: #f9fafb;
+      color: #475467;
+      font-size: 12px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .status-approved {
+      color: #166534;
+      background: #dcfce7;
+      border-color: #bbf7d0;
+    }
+
+    .status-rejected {
+      color: #991b1b;
+      background: #fee2e2;
+      border-color: #fecaca;
+    }
+
+    .status-pending {
+      color: #92400e;
+      background: #fef3c7;
+      border-color: #fde68a;
+    }
+
+    .status-waitlisted {
+      color: #155e75;
+      background: #cffafe;
+      border-color: #a5f3fc;
+    }
+
+    .activity-item {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      padding: 11px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .activity-item:last-child {
+      border-bottom: 0;
+    }
+
+    .activity-title {
+      color: var(--nav);
+      font-weight: 900;
+      line-height: 1.3;
+    }
+
+    .audit-table td {
+      white-space: nowrap;
+    }
+
+    .audit-table td:first-child,
+    .audit-table td:nth-child(2) {
+      white-space: normal;
+      min-width: 150px;
+    }
+
+    .empty-state {
+      color: var(--muted);
+      background: var(--panel-soft);
+      border: 1px dashed #cbd5e1;
+      border-radius: 8px;
+      padding: 14px;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .sidebar::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    .sidebar::-webkit-scrollbar-track {
+      background: #111827;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb {
+      background: #374151;
+      border-radius: 3px;
+    }
+
+    .sidebar::-webkit-scrollbar-thumb:hover {
+      background: #4b5563;
+    }
+
+    @media (max-width: 1340px) {
+      .metrics-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+
+      .filter-grid {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+      }
+    }
+
+    @media (max-width: 1060px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1001;
+      }
+
+      .layout.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 1000;
+      }
+
+      .layout.sidebar-open .sidebar-overlay {
+        display: block;
+      }
+
+      .sidebar-toggle {
+        display: inline-flex;
+      }
+
+      .chart-grid,
+      .wide-grid,
+      .table-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .main {
+        padding: 16px;
+      }
+
+      .topbar {
+        flex-direction: column;
+      }
+
+      .top-actions {
+        width: 100%;
+      }
+
+      .btn {
+        flex: 1;
+      }
+
+      .heading h1 {
+        font-size: 26px;
+      }
+
+      .filter-grid,
+      .metrics-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .room-row,
+      .activity-item {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .main {
+        padding: 12px;
+      }
+
+      .heading h1 {
+        font-size: 22px;
+      }
+
+      .heading p {
+        font-size: 12px;
+      }
+
+      .metric-card {
+        padding: 12px;
+        min-height: 96px;
+      }
+
+      .metric-value {
+        font-size: 22px;
+      }
+
+      .metric-label {
+        font-size: 10px;
+      }
+
+      .filter-panel {
+        padding: 10px;
+      }
+
+      .field label {
+        font-size: 10px;
+      }
+
+      .field input,
+      .field select {
+        min-height: 36px;
+        padding: 7px 9px;
+        font-size: 13px;
+      }
+
+      .chart-card,
+      .table-card,
+      .progress-card,
+      .activity-card {
+        padding: 12px;
+      }
+
+      .card-title {
+        font-size: 14px;
+      }
+
+      .chart-shell {
+        min-height: 240px;
+      }
+
+      .chart-shell.small {
+        min-height: 200px;
+      }
+
+      th, td {
+        padding: 8px 6px;
+        font-size: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span style="font-size: 24px;">⚙️</span>
+        <h2>Admin Panel</h2>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="/admin-dashboard.html">📊 Dashboard</a>
+        <a href="/admin-analytics.html" class="active">📈 Analytics</a>
+        <a href="/admin-config.html">⚙️ Configuration</a>
+        <a href="/admin-mail-health.html">📧 Mail Health</a>
+      </nav>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">Management</div>
+        <nav class="sidebar-menu">
+          <a href="/admin-dashboard.html#approvals">✅ Approver Accounts</a>
+          <a href="/admin-dashboard.html#users">👥 Users</a>
+          <a href="/admin-config.html#roomConf">🏢 Meeting Rooms</a>
+          <a href="/admin-analytics.html">📋 Reports</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">System</div>
+        <nav class="sidebar-menu">
+          <a href="/admin-dashboard.html#backup">💾 Backup</a>
+          <a href="/admin-dashboard.html#logs">📝 Logs</a>
+          <a href="/logout" style="color: #ef4444;">🚪 Logout</a>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-overlay></div>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="heading">
+          <h1>Admin Analytics</h1>
+          <p>Live room demand, approvals, department activity, waiting-list pressure, and system audit events.</p>
+        </div>
+        <div class="top-actions">
+          <button class="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-sidebar-toggle>⋮</button>
+          <button class="btn btn-light" type="button" id="resetBtn">Reset</button>
+          <button class="btn btn-dark" type="button" id="refreshBtn">Refresh</button>
+        </div>
+      </div>
+
+      <section class="filter-panel" aria-label="Analytics filters">
+        <div class="filter-grid">
+          <div class="field">
+            <label for="dateFrom">From</label>
+            <input id="dateFrom" type="date">
+          </div>
+          <div class="field">
+            <label for="dateTo">To</label>
+            <input id="dateTo" type="date">
+          </div>
+          <div class="field">
+            <label for="departmentFilter">Department</label>
+            <select id="departmentFilter">
+              <option value="">All departments</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="roomFilter">Room</label>
+            <select id="roomFilter">
+              <option value="">All rooms</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="statusFilter">Status</label>
+            <select id="statusFilter">
+              <option value="">All statuses</option>
+              <option value="Approved">Approved</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Pending">Pending</option>
+              <option value="Waitlisted">Waitlisted</option>
+              <option value="Cancelled">Cancelled</option>
+              <option value="Expired">Expired</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="roleFilter">User Role</label>
+            <select id="roleFilter">
+              <option value="">All roles</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="timeSlotFilter">Time Slot</label>
+            <select id="timeSlotFilter">
+              <option value="">All hours</option>
+            </select>
+          </div>
+          <div class="field">
+            <button class="btn btn-dark" type="button" id="applyBtn">Apply</button>
+          </div>
+        </div>
+        <div class="status-line" id="statusLine">Loading analytics...</div>
+      </section>
+
+      <section class="metrics-grid" aria-label="Overview statistics">
+        <div class="metric-card">
+          <div class="metric-label">Total Bookings</div>
+          <div class="metric-value" id="totalBookings">0</div>
+          <div class="metric-note">Requests in view</div>
+        </div>
+        <div class="metric-card success">
+          <div class="metric-label">Approved Requests</div>
+          <div class="metric-value" id="approvedCount">0</div>
+          <div class="metric-note" id="approvedMeta">0% approval share</div>
+        </div>
+        <div class="metric-card danger">
+          <div class="metric-label">Rejected Requests</div>
+          <div class="metric-value" id="rejectedCount">0</div>
+          <div class="metric-note">Declined requests</div>
+        </div>
+        <div class="metric-card warn">
+          <div class="metric-label">Pending Approvals</div>
+          <div class="metric-value" id="pendingCount">0</div>
+          <div class="metric-note">Awaiting action</div>
+        </div>
+        <div class="metric-card teal">
+          <div class="metric-label">Waiting List</div>
+          <div class="metric-value" id="waitlistedCount">0</div>
+          <div class="metric-note" id="waitingMeta">No queue pressure</div>
+        </div>
+        <div class="metric-card violet">
+          <div class="metric-label">Active Users</div>
+          <div class="metric-value" id="activeUsers">0</div>
+          <div class="metric-note">Registered accounts</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-label">Most Utilized Room</div>
+          <div class="metric-value" id="mostUtilizedRoom">-</div>
+          <div class="metric-note" id="mostUtilizedMeta">No room usage yet</div>
+        </div>
+      </section>
+
+      <section class="chart-grid">
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Department-Wise Analytics</h2>
+              <p class="card-subtitle" id="departmentSubtitle">Bookings, approvals, rejections, pending requests, waiting list load, and usage hours.</p>
+            </div>
+            <span class="pill" id="departmentPill">0 departments</span>
+          </div>
+          <div class="chart-shell" style="overflow-x: auto;">
+            <div style="min-width: 800px; height: 100%; min-height: 300px;">
+              <canvas id="departmentChart"></canvas>
+            </div>
+          </div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Approval Workflow</h2>
+              <p class="card-subtitle">Approved, rejected, pending, waiting, cancelled, and expired requests.</p>
+            </div>
+          </div>
+          <div class="chart-shell donut"><canvas id="statusChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="wide-grid">
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Daily Booking Trend</h2>
+              <p class="card-subtitle">Request volume over time.</p>
+            </div>
+          </div>
+          <div class="chart-shell small"><canvas id="trendChart"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Monthly Booking Trend</h2>
+              <p class="card-subtitle">Seasonal room usage pattern.</p>
+            </div>
+          </div>
+          <div class="chart-shell small"><canvas id="monthlyChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="wide-grid">
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Peak Booking Hours</h2>
+              <p class="card-subtitle">Demand by requested start hour.</p>
+            </div>
+            <span class="pill" id="peakHourPill">No peak yet</span>
+          </div>
+          <div class="chart-shell small"><canvas id="peakChart"></canvas></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">User Role Mix</h2>
+              <p class="card-subtitle">Registered account distribution.</p>
+            </div>
+          </div>
+          <div class="chart-shell small"><canvas id="roleChart"></canvas></div>
+        </div>
+      </section>
+
+      <section class="wide-grid">
+        <div class="progress-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Room-Wise Utility Analysis</h2>
+              <p class="card-subtitle">Bookings, occupancy, usage duration, conflicts, utilization, and availability.</p>
+            </div>
+          </div>
+          <div class="room-list" id="roomUtilization"></div>
+        </div>
+
+        <div class="chart-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Time Slot Utilization</h2>
+              <p class="card-subtitle">Room occupancy concentration by weekday and hour.</p>
+            </div>
+          </div>
+          <div class="heatmap-wrap">
+            <div class="heatmap" id="timeHeatmap"></div>
+          </div>
+        </div>
+      </section>
+
+      <section class="table-grid">
+        <div class="table-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Department Summary</h2>
+              <p class="card-subtitle">Most active departments, approval rate, and total usage hours.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Total</th>
+                  <th>Approved</th>
+                  <th>Rejected</th>
+                  <th>Pending</th>
+                  <th>Waiting</th>
+                  <th>Approval</th>
+                  <th>Hours</th>
+                </tr>
+              </thead>
+              <tbody id="departmentRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="table-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">User Behavior</h2>
+              <p class="card-subtitle">Most active requesters and approval success rate.</p>
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>User</th>
+                  <th>Department</th>
+                  <th>Bookings</th>
+                  <th>Success</th>
+                </tr>
+              </thead>
+              <tbody id="userRows"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="table-grid">
+        <div class="table-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Waiting List Analytics</h2>
+              <p class="card-subtitle">Department queue pressure and frequently conflicting slots.</p>
+            </div>
+            <span class="pill" id="avgWaitPill">0 min avg wait</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Department</th>
+                  <th>Waiting Requests</th>
+                </tr>
+              </thead>
+              <tbody id="waitingRows"></tbody>
+            </table>
+          </div>
+          <div class="table-wrap" style="margin-top:14px;">
+            <table>
+              <thead>
+                <tr>
+                  <th>Room</th>
+                  <th>Date</th>
+                  <th>Hour</th>
+                  <th>Conflicts</th>
+                </tr>
+              </thead>
+              <tbody id="conflictRows"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="activity-card">
+          <div class="card-head">
+            <div>
+              <h2 class="card-title">Recent Booking Activity</h2>
+              <p class="card-subtitle">Newest booking, approval, rejection, and waiting list updates.</p>
+            </div>
+          </div>
+          <div class="activity-list" id="recentActivity"></div>
+        </div>
+      </section>
+
+      <section class="table-card">
+        <div class="card-head">
+          <div>
+            <h2 class="card-title">System Logs and Audit Trail</h2>
+            <p class="card-subtitle">Login OTP events, booking creation, approvals, waiting-list updates, room allocation changes, and email notifications.</p>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="audit-table">
+            <thead>
+              <tr>
+                <th>Username</th>
+                <th>Action</th>
+                <th>Timestamp</th>
+                <th>Booking ID</th>
+                <th>Previous</th>
+                <th>Updated</th>
+              </tr>
+            </thead>
+            <tbody id="auditRows"></tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+  <script>
+    const charts = {};
+    const departmentFilter = document.getElementById('departmentFilter');
+    const roomFilter = document.getElementById('roomFilter');
+    const statusFilter = document.getElementById('statusFilter');
+    const roleFilter = document.getElementById('roleFilter');
+    const timeSlotFilter = document.getElementById('timeSlotFilter');
+    const dateFrom = document.getElementById('dateFrom');
+    const dateTo = document.getElementById('dateTo');
+    const statusLine = document.getElementById('statusLine');
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function number(value) {
+      return Number(value || 0);
+    }
+
+    function formatNumber(value) {
+      return number(value).toLocaleString();
+    }
+
+    function percent(part, total) {
+      if (!total) return '0%';
+      return `${Math.round((number(part) / number(total)) * 100)}%`;
+    }
+
+    function formatDate(value) {
+      if (!value) return '-';
+      const parsed = new Date(String(value).replace(/\s*(GMT|UTC|Z)$/i, ''));
+      if (Number.isNaN(parsed.getTime())) return String(value);
+      return parsed.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+    }
+
+    function formatDateTime(value) {
+      if (!value) return '-';
+      const parsed = new Date(String(value).replace(/\s*(GMT|UTC|Z)$/i, ''));
+      if (Number.isNaN(parsed.getTime())) return String(value);
+      return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    }
+
+    (function setupSidebarToggle() {
+      const layout = document.querySelector('.layout');
+      const toggleButton = document.querySelector('[data-sidebar-toggle]');
+      const overlay = document.querySelector('[data-sidebar-overlay]');
+
+      function setSidebarOpen(isOpen) {
+        if (!layout || !toggleButton) {
+          return;
+        }
+        layout.classList.toggle('sidebar-open', isOpen);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('sidebar-locked', isOpen);
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          const isOpen = layout && layout.classList.contains('sidebar-open');
+          setSidebarOpen(!isOpen);
+        });
+      }
+
+      if (overlay) {
+        overlay.addEventListener('click', () => setSidebarOpen(false));
+      }
+
+      document.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 1060) {
+            setSidebarOpen(false);
+          }
+        });
+      });
+    })();
+
+    function formatHour(value) {
+      const hour = Number(value);
+      if (Number.isNaN(hour)) return '-';
+      return `${String(hour).padStart(2, '0')}:00`;
+    }
+
+    function statusClass(status) {
+      const value = String(status || '').toLowerCase();
+      if (value === 'approved') return 'status-approved';
+      if (value === 'rejected') return 'status-rejected';
+      if (value === 'waitlisted') return 'status-waitlisted';
+      if (value.startsWith('pending')) return 'status-pending';
+      return '';
+    }
+
+    function statusText(status) {
+      return String(status || 'Unknown').replace(/_/g, ' ');
+    }
+
+    function chartColors() {
+      return {
+        blue: 'rgba(37, 99, 235, 0.86)',
+        teal: 'rgba(15, 118, 110, 0.82)',
+        green: 'rgba(21, 128, 61, 0.86)',
+        amber: 'rgba(180, 83, 9, 0.82)',
+        red: 'rgba(185, 28, 28, 0.82)',
+        violet: 'rgba(124, 58, 237, 0.78)',
+        gray: 'rgba(102, 112, 133, 0.68)',
+      };
+    }
+
+    function destroyChart(key) {
+      if (charts[key]) {
+        charts[key].destroy();
+        charts[key] = null;
+      }
+    }
+
+    function ensureChartJs() {
+      if (window.Chart) return true;
+      statusLine.textContent = 'Chart library could not be loaded.';
+      statusLine.style.color = '#b91c1c';
+      return false;
+    }
+
+    function readFilters() {
+      const params = new URLSearchParams();
+      if (dateFrom.value) params.set('date_from', dateFrom.value);
+      if (dateTo.value) params.set('date_to', dateTo.value);
+      if (departmentFilter.value) params.set('department', departmentFilter.value);
+      if (roomFilter.value) params.set('room_no', roomFilter.value);
+      if (statusFilter.value) params.set('status', statusFilter.value);
+      if (roleFilter.value) params.set('user_role', roleFilter.value);
+      if (timeSlotFilter.value) params.set('time_slot', timeSlotFilter.value);
+      return params;
+    }
+
+    function setSelectOptions(select, rows, valueKey, labelFn, defaultLabel) {
+      const currentValue = select.value;
+      select.innerHTML = `<option value="">${escapeHtml(defaultLabel)}</option>`;
+      rows.forEach(row => {
+        const value = row[valueKey];
+        if (value === null || value === undefined || value === '') return;
+        const option = document.createElement('option');
+        option.value = String(value);
+        option.textContent = labelFn(row);
+        select.appendChild(option);
+      });
+      if ([...select.options].some(option => option.value === currentValue)) {
+        select.value = currentValue;
+      }
+    }
+
+    function populateStaticTimeSlots() {
+      if (timeSlotFilter.options.length > 1) return;
+      for (let hour = 0; hour < 24; hour += 1) {
+        const option = document.createElement('option');
+        option.value = String(hour);
+        option.textContent = formatHour(hour);
+        timeSlotFilter.appendChild(option);
+      }
+    }
+
+    function renderFilters(data) {
+      setSelectOptions(
+        departmentFilter,
+        data.available_departments || [],
+        'department',
+        row => row.department,
+        'All departments',
+      );
+      setSelectOptions(
+        roomFilter,
+        data.available_rooms || [],
+        'room_no',
+        row => `${row.hall_name || `Hall ${row.room_no}`} (${row.room_no})`,
+        'All rooms',
+      );
+      setSelectOptions(
+        roleFilter,
+        data.available_roles || [],
+        'role',
+        row => String(row.role || 'unknown').toUpperCase(),
+        'All roles',
+      );
+      populateStaticTimeSlots();
+    }
+
+    function renderMetrics(data) {
+      const total = number(data.total_bookings);
+      const mostRoom = data.most_booked_room || {};
+      const utilization = number(mostRoom.utilization_percent);
+      const usageHours = number(mostRoom.usage_hours);
+
+      document.getElementById('totalBookings').textContent = formatNumber(total);
+      document.getElementById('approvedCount').textContent = formatNumber(data.approved_count);
+      document.getElementById('rejectedCount').textContent = formatNumber(data.rejected_count);
+      document.getElementById('pendingCount').textContent = formatNumber(data.pending_count);
+      document.getElementById('waitlistedCount').textContent = formatNumber(data.waitlisted_count);
+      document.getElementById('activeUsers').textContent = formatNumber(data.total_active_users);
+      document.getElementById('approvedMeta').textContent = `${percent(data.approved_count, total)} approval share`;
+      document.getElementById('waitingMeta').textContent = data.avg_wait_minutes
+        ? `${formatNumber(data.avg_wait_minutes)} min average wait`
+        : 'No queue pressure';
+      document.getElementById('mostUtilizedRoom').textContent = mostRoom.hall_name || (mostRoom.room_no ? `Hall ${mostRoom.room_no}` : '-');
+      document.getElementById('mostUtilizedMeta').textContent = mostRoom.room_no
+        ? `${utilization}% utilized - ${formatNumber(usageHours)} usage hours`
+        : 'No room usage yet';
+      document.getElementById('avgWaitPill').textContent = `${formatNumber(data.avg_wait_minutes)} min avg wait`;
+    }
+
+    function renderDepartmentChart(rows) {
+      destroyChart('department');
+      if (!ensureChartJs()) return;
+      const colors = chartColors();
+      const labels = rows.map(row => row.department);
+      const canvas = document.getElementById('departmentChart');
+      if (canvas && canvas.parentElement) {
+        canvas.parentElement.style.minWidth = Math.max(800, rows.length * 80) + 'px';
+      }
+      const ctx = canvas.getContext('2d');
+      charts.department = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [
+            { label: 'Approved', data: rows.map(row => number(row.approved_count)), backgroundColor: colors.green, borderRadius: 6, borderSkipped: false },
+            { label: 'Rejected', data: rows.map(row => number(row.rejected_count)), backgroundColor: colors.red, borderRadius: 6, borderSkipped: false },
+            { label: 'Pending', data: rows.map(row => number(row.pending_count)), backgroundColor: colors.amber, borderRadius: 6, borderSkipped: false },
+            { label: 'Waiting', data: rows.map(row => number(row.waitlisted_count)), backgroundColor: colors.teal, borderRadius: 6, borderSkipped: false },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#475467' } },
+            tooltip: { mode: 'index', intersect: false },
+          },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: '#667085' } },
+            y: { stacked: true, beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.18)' }, ticks: { precision: 0, color: '#667085' } },
+          },
+        },
+      });
+    }
+
+    function renderStatusChart(rows) {
+      destroyChart('status');
+      if (!ensureChartJs()) return;
+      const colors = chartColors();
+      let filtered = rows.filter(row => number(row.count) > 0);
+      if (!filtered.length) filtered = [{ status: 'No data', count: 1 }];
+      const ctx = document.getElementById('statusChart').getContext('2d');
+      charts.status = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: filtered.map(row => row.status),
+          datasets: [{
+            data: filtered.map(row => number(row.count)),
+            backgroundColor: [colors.green, colors.red, colors.amber, colors.teal, colors.gray, colors.blue],
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '66%',
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#475467' } },
+          },
+        },
+      });
+    }
+
+    function renderTrendChart(rows) {
+      destroyChart('trend');
+      if (!ensureChartJs()) return;
+      const colors = chartColors();
+      const ctx = document.getElementById('trendChart').getContext('2d');
+      charts.trend = new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: rows.map(row => formatDate(row.date_label)),
+          datasets: [{
+            label: 'Bookings',
+            data: rows.map(row => number(row.bookings)),
+            borderColor: colors.blue,
+            backgroundColor: 'rgba(37, 99, 235, 0.12)',
+            fill: true,
+            tension: 0.34,
+            pointRadius: 3,
+            pointHoverRadius: 5,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#667085', maxRotation: 0 } },
+            y: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.18)' }, ticks: { precision: 0, color: '#667085' } },
+          },
+        },
+      });
+    }
+
+    function renderMonthlyChart(rows) {
+      destroyChart('monthly');
+      if (!ensureChartJs()) return;
+      const colors = chartColors();
+      const ctx = document.getElementById('monthlyChart').getContext('2d');
+      charts.monthly = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: rows.map(row => row.month),
+          datasets: [{
+            label: 'Bookings',
+            data: rows.map(row => number(row.bookings)),
+            backgroundColor: colors.violet,
+            borderRadius: 6,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#667085' } },
+            y: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.18)' }, ticks: { precision: 0, color: '#667085' } },
+          },
+        },
+      });
+    }
+
+    function renderPeakChart(rows) {
+      destroyChart('peak');
+      if (!ensureChartJs()) return;
+      const sorted = [...rows].sort((left, right) => number(left.hour_of_day) - number(right.hour_of_day));
+      const topPeak = [...rows].sort((left, right) => number(right.bookings) - number(left.bookings))[0];
+      document.getElementById('peakHourPill').textContent = topPeak
+        ? `${formatHour(topPeak.hour_of_day)} peak`
+        : 'No peak yet';
+      const colors = chartColors();
+      const ctx = document.getElementById('peakChart').getContext('2d');
+      charts.peak = new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels: sorted.map(row => formatHour(row.hour_of_day)),
+          datasets: [{
+            label: 'Bookings',
+            data: sorted.map(row => number(row.bookings)),
+            backgroundColor: colors.amber,
+            borderRadius: 6,
+            borderSkipped: false,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: '#667085', maxRotation: 0 } },
+            y: { beginAtZero: true, grid: { color: 'rgba(148, 163, 184, 0.18)' }, ticks: { precision: 0, color: '#667085' } },
+          },
+        },
+      });
+    }
+
+    function renderRoleChart(rows) {
+      destroyChart('role');
+      if (!ensureChartJs()) return;
+      const colors = chartColors();
+      let filtered = (rows || []).filter(row => number(row.user_count) > 0);
+      if (!filtered.length) filtered = [{ role: 'No users', user_count: 1 }];
+      const ctx = document.getElementById('roleChart').getContext('2d');
+      charts.role = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: filtered.map(row => String(row.role || 'unknown').toUpperCase()),
+          datasets: [{
+            data: filtered.map(row => number(row.user_count)),
+            backgroundColor: [colors.blue, colors.teal, colors.green, colors.amber, colors.violet, colors.gray],
+            borderWidth: 0,
+          }],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          cutout: '62%',
+          plugins: {
+            legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 8, color: '#475467' } },
+          },
+        },
+      });
+    }
+
+    function renderRooms(rows) {
+      const target = document.getElementById('roomUtilization');
+      if (!rows.length) {
+        target.innerHTML = '<div class="empty-state">No active rooms found.</div>';
+        return;
+      }
+      target.innerHTML = rows.map(row => {
+        const pct = Math.max(0, Math.min(100, number(row.utilization_percent)));
+        const available = Math.max(0, Math.min(100, number(row.availability_percent)));
+        const occupancy = row.avg_occupancy ? `${formatNumber(row.avg_occupancy)} avg occupancy` : 'No occupancy data';
+        return `
+          <div class="room-row">
+            <div>
+              <div class="room-name">${escapeHtml(row.hall_name || `Hall ${row.room_no}`)}</div>
+              <div class="room-meta">Room ${escapeHtml(row.room_no)} - ${escapeHtml(occupancy)}</div>
+            </div>
+            <div>
+              <div class="track"><div class="fill" style="width:${pct}%"></div></div>
+              <div class="room-meta">${formatNumber(row.booking_count)} bookings - ${formatNumber(row.usage_hours)} hours - ${formatNumber(row.conflict_count)} conflicts - ${available}% available</div>
+            </div>
+            <div class="pill">${pct}%</div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    function renderHeatmap(rows) {
+      const target = document.getElementById('timeHeatmap');
+      const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+      const hours = Array.from({ length: 17 }, (_, index) => index + 5);
+      const lookup = new Map(rows.map(row => [`${row.day_index}-${row.hour_of_day}`, number(row.bookings)]));
+      const maxValue = Math.max(...rows.map(row => number(row.bookings)), 0);
+      let html = '<div class="heat-head">Day</div>';
+      html += hours.map(hour => `<div class="heat-head">${String(hour).padStart(2, '0')}</div>`).join('');
+      days.forEach((day, dayIndex) => {
+        html += `<div class="heat-day">${day.slice(0, 3)}</div>`;
+        hours.forEach(hour => {
+          const value = lookup.get(`${dayIndex}-${hour}`) || 0;
+          const opacity = maxValue ? 0.12 + (value / maxValue) * 0.72 : 0.08;
+          html += `<div class="heat-cell" title="${day} ${formatHour(hour)}: ${value} bookings" style="background:rgba(37,99,235,${opacity})">${value || ''}</div>`;
+        });
+      });
+      target.innerHTML = html;
+    }
+
+    function renderTables(data) {
+      const deptRows = document.getElementById('departmentRows');
+      const userRows = document.getElementById('userRows');
+      const waitingRows = document.getElementById('waitingRows');
+      const conflictRows = document.getElementById('conflictRows');
+
+      deptRows.innerHTML = (data.department_usage || []).map(row => `
+        <tr>
+          <td><strong>${escapeHtml(row.department)}</strong></td>
+          <td>${formatNumber(row.total_requests)}</td>
+          <td>${formatNumber(row.approved_count)}</td>
+          <td>${formatNumber(row.rejected_count)}</td>
+          <td>${formatNumber(row.pending_count)}</td>
+          <td>${formatNumber(row.waitlisted_count)}</td>
+          <td>${row.approval_rate === null ? '0%' : `${escapeHtml(row.approval_rate)}%`}</td>
+          <td>${formatNumber(row.usage_hours)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="8">No department data.</td></tr>';
+
+      userRows.innerHTML = (data.top_requesters || []).map(row => `
+        <tr>
+          <td><strong>${escapeHtml(row.name || row.username || 'Unknown')}</strong><br><span class="activity-meta">${escapeHtml(row.username || '-')}</span></td>
+          <td>${escapeHtml(row.department || 'Unknown')}</td>
+          <td>${formatNumber(row.booking_count)}</td>
+          <td>${row.approval_success_rate === null ? '0%' : `${escapeHtml(row.approval_success_rate)}%`}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">No requester activity yet.</td></tr>';
+
+      waitingRows.innerHTML = (data.waiting_by_department || []).map(row => `
+        <tr>
+          <td><strong>${escapeHtml(row.department)}</strong></td>
+          <td>${formatNumber(row.waiting_count)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="2">No waiting list requests.</td></tr>';
+
+      conflictRows.innerHTML = (data.conflicting_slots || []).map(row => `
+        <tr>
+          <td><strong>${escapeHtml(row.hall_name || `Hall ${row.room_no}`)}</strong></td>
+          <td>${formatDate(row.slot_date)}</td>
+          <td>${formatHour(row.hour_of_day)}</td>
+          <td>${formatNumber(row.conflict_count)}</td>
+        </tr>
+      `).join('') || '<tr><td colspan="4">No recurring conflicts detected.</td></tr>';
+    }
+
+    function renderRecentActivity(rows) {
+      const target = document.getElementById('recentActivity');
+      if (!rows.length) {
+        target.innerHTML = '<div class="empty-state">No recent booking activity found.</div>';
+        return;
+      }
+      target.innerHTML = rows.map(row => `
+        <div class="activity-item">
+          <div>
+            <div class="activity-title">${escapeHtml(row.purpose || 'Booking request')}</div>
+            <div class="activity-meta">
+              ${escapeHtml(row.requester_name || 'Unknown')} - ${escapeHtml(row.requester_department || 'Unknown')} -
+              ${escapeHtml(row.hall_name || `Hall ${row.room_no}`)}
+            </div>
+            <div class="activity-meta">${formatDateTime(row.updated_at || row.submitted_at)} - ${formatDateTime(row.requested_start)}</div>
+          </div>
+          <div><span class="status-chip ${statusClass(row.request_status)}">${escapeHtml(statusText(row.request_status))}</span></div>
+        </div>
+      `).join('');
+    }
+
+    function renderAuditLogs(rows) {
+      const target = document.getElementById('auditRows');
+      target.innerHTML = (rows || []).map(row => `
+        <tr>
+          <td><strong>${escapeHtml(row.username || 'System')}</strong></td>
+          <td>${escapeHtml(row.action || '-')}</td>
+          <td>${formatDateTime(row.event_time)}</td>
+          <td>${escapeHtml(row.booking_id || '-')}</td>
+          <td>${escapeHtml(row.previous_status || '-')}</td>
+          <td><span class="status-chip ${statusClass(row.updated_status)}">${escapeHtml(statusText(row.updated_status || '-'))}</span></td>
+        </tr>
+      `).join('') || '<tr><td colspan="6">No audit records found.</td></tr>';
+    }
+
+    function renderAnalytics(data) {
+      const departments = data.department_usage || [];
+      renderFilters(data);
+      renderMetrics(data);
+      renderDepartmentChart(departments);
+      renderStatusChart(data.approval_summary || []);
+      renderTrendChart(data.booking_trend || []);
+      renderMonthlyChart(data.monthly_trend || []);
+      renderPeakChart(data.peak_hours || []);
+      renderRoleChart(data.role_breakdown || []);
+      renderRooms(data.hall_usage || []);
+      renderHeatmap(data.time_slot_heatmap || []);
+      renderTables(data);
+      renderRecentActivity(data.recent_activity || []);
+      renderAuditLogs(data.system_logs || []);
+
+      document.getElementById('departmentPill').textContent = `${departments.length} departments`;
+      document.getElementById('departmentSubtitle').textContent = departments.length
+        ? `Showing ${departments.length} departments from users and booking records.`
+        : 'No departments found yet.';
+    }
+
+    async function loadAnalytics() {
+      statusLine.textContent = 'Loading analytics...';
+      statusLine.style.color = '#667085';
+      try {
+        const params = readFilters();
+        const url = params.toString() ? `/api/admin/analytics?${params}` : '/api/admin/analytics';
+        const response = await fetch(url, { headers: { Accept: 'application/json' } });
+        const data = await response.json();
+        if (!response.ok || !data.ok) {
+          throw new Error(data.error || 'Failed to load analytics');
+        }
+        renderAnalytics(data);
+        statusLine.textContent = `Updated ${new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+        statusLine.style.color = '#15803d';
+      } catch (error) {
+        statusLine.textContent = error.message || 'Failed to load analytics.';
+        statusLine.style.color = '#b91c1c';
+      }
+    }
+
+    document.getElementById('applyBtn').addEventListener('click', loadAnalytics);
+    document.getElementById('refreshBtn').addEventListener('click', loadAnalytics);
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      dateFrom.value = '';
+      dateTo.value = '';
+      departmentFilter.value = '';
+      roomFilter.value = '';
+      statusFilter.value = '';
+      roleFilter.value = '';
+      timeSlotFilter.value = '';
+      loadAnalytics();
+    });
+
+    [dateFrom, dateTo, departmentFilter, roomFilter, statusFilter, roleFilter, timeSlotFilter].forEach(control => {
+      control.addEventListener('change', loadAnalytics);
+    });
+
+    populateStaticTimeSlots();
+    loadAnalytics();
+    setInterval(loadAnalytics, 60000);
+  </script>
+</body>
+</html>

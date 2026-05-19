@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="csrf-token" content="{{ csrf_token() }}">
+	<meta name="description" content="Browse available halls and reserve the perfect space for your event.">
+	<title>{{ config.app_title if config else 'Meeting Hall System' }} - Halls</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/static/halls.css">
+</head>
+<body>
+	<div class="halls-page">
+		<header class="top-shell">
+			<div class="brand-mark">Book Sphere</div>
+			<nav class="top-nav" aria-label="Primary navigation">
+				<a href="/requester-dashboard.html">Dashboard</a>
+				<a href="/halls.html" class="active">Halls</a>
+			</nav>
+			<div class="top-tools">
+				<a href="/logout" class="profile-chip" title="Logout" aria-label="Logout">
+					<span>{{ ((user.name or user.username) or 'U')[0:1] if user else 'U' }}</span>
+				</a>
+			</div>
+		</header>
+
+		<main>
+			<section class="hero-panel">
+				<div class="hero-copy">
+					<h1>Reserve<br>for<br>Excellence.</h1>
+					<p>Elite academic spaces designed for high-impact lectures, sporting events, and collaborative research.</p>
+				</div>
+				<form id="capacityForm" class="finder-card" autocomplete="off">
+					<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+					<label for="minCapacity">MIN CAPACITY</label>
+					<div class="input-wrap">
+						<span aria-hidden="true">👥</span>
+						<select id="minCapacity" name="minCapacity">
+							<option value="">e.g. Any</option>
+							<option value="5-10">5-10</option>
+							<option value="25-50">25-50</option>
+							<option value="50-100">50-100</option>
+							<option value="100+">100+</option>
+						</select>
+					</div>
+					<button type="submit">Find Available</button>
+				</form>
+			</section>
+
+			<section class="halls-area">
+				<div class="halls-head">
+					<div>
+						<p class="kicker">PREMIER SELECTION</p>
+						<h2>Available Halls</h2>
+					</div>
+					<div class="view-icons" aria-label="View controls">
+						<button type="button" class="is-active" title="Grid view">◫</button>
+					</div>
+				</div>
+
+				<p id="statusMessage" class="status-message" role="status" aria-live="polite"></p>
+
+				<div id="hallGrid" class="hall-grid" aria-live="polite"></div>
+			</section>
+
+			<section class="stats-strip" aria-label="Platform statistics">
+				<article><strong>2</strong><span>PREMIUM VENUES</span></article>
+				<article><strong>120+</strong><span>ANNUAL EVENTS</span></article>
+				<article><strong>99%</strong><span>USER SATISFACTION</span></article>
+				<article><strong>24/7</strong><span>DIGITAL SUPPORT</span></article>
+			</section>
+		</main>
+
+		<footer class="footer-shell">
+			<div>
+				<h3>Academia Arena</h3>
+				<p>© 2026 Academia Arena. All rights reserved.</p>
+			</div>
+			<div class="footer-links">
+				<a href="/home.html">Home</a>
+				<a href="/requester-dashboard.html">Dashboard</a>
+			</div>
+		</footer>
+	</div>
+
+	<template id="hallCardTemplate">
+		<article class="hall-card">
+			<figure>
+				<img alt="Hall preview" loading="lazy">
+				<figcaption class="availability"></figcaption>
+			</figure>
+			<div class="hall-body">
+				<h3></h3>
+				<p class="location"></p>
+				<div class="meta-row">
+					<span class="meta capacity"></span>
+					<span class="meta feature"></span>
+				</div>
+				<a class="action-link" href="/requester-booking.html">View Availability</a>
+			</div>
+		</article>
+	</template>
+
+	<script>
+		(function() {
+			const token = document.querySelector('meta[name="csrf-token"]');
+			if (!token || !window.fetch) return;
+			const csrf = token.getAttribute('content');
+			const originalFetch = window.fetch;
+			window.fetch = function(input, init) {
+				init = init || {};
+				const method = (init.method || 'GET').toUpperCase();
+				if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+					const headers = new Headers(init.headers || {});
+					if (!headers.has('X-CSRFToken')) {
+						headers.set('X-CSRFToken', csrf);
+					}
+					init.headers = headers;
+				}
+				return originalFetch(input, init);
+			};
+		})();
+	</script>
+	<script>
+		const fallbackHalls = [
+			{
+				room_no: 1,
+				hall_name: 'Gallery Room - 1',
+				capacity: 200,
+				min_capacity: 40,
+				is_active: true,
+				image: '/static/image1.png',
+				feature: 'Gigabit'
+			},
+			{
+				room_no: 2,
+				hall_name: 'Gallery Room - 2',
+				capacity: 45,
+				min_capacity: 20,
+				is_active: true,
+				image: '/static/image2.png',
+				feature: '4K VC'
+			},
+			{
+				room_no: 3,
+				hall_name: 'Board Room - 1',
+				capacity: 800,
+				min_capacity: 200,
+				is_active: true,
+				image: '/static/image3.png',
+				feature: 'Acoustic'
+			}
+		];
+
+		const hallImages = ['/static/image1.png', '/static/image2.png', '/static/image3.png', '/static/image4.png'];
+		const hallGrid = document.getElementById('hallGrid');
+		const statusMessage = document.getElementById('statusMessage');
+		const capacityForm = document.getElementById('capacityForm');
+		const minCapacityInput = document.getElementById('minCapacity');
+		const cardTemplate = document.getElementById('hallCardTemplate');
+
+		function renderCards(halls) {
+			hallGrid.innerHTML = '';
+
+			if (!halls.length) {
+				statusMessage.textContent = 'No halls match this capacity. Try a lower number.';
+				return;
+			}
+
+			halls.forEach((hall, index) => {
+				const node = cardTemplate.content.cloneNode(true);
+				const title = node.querySelector('h3');
+				const location = node.querySelector('.location');
+				const capacity = node.querySelector('.capacity');
+				const feature = node.querySelector('.feature');
+				const availability = node.querySelector('.availability');
+				const image = node.querySelector('img');
+				const card = node.querySelector('.hall-card');
+				const action = node.querySelector('.action-link');
+
+				const hallName = hall.hall_name || `Hall ${hall.room_no || index + 1}`;
+				const imageSrc = hall.image_path || hall.image || hallImages[index % hallImages.length];
+
+				title.textContent = hallName;
+				location.textContent = `Room ${hall.room_no || index + 1}`;
+				capacity.textContent = `${hall.capacity || 0} Capacity`;
+				feature.textContent = hall.feature || 'Hybrid Ready';
+				availability.textContent = hall.is_active === false ? 'INACTIVE' : 'AVAILABLE';
+				availability.classList.toggle('queued', hall.is_active === false);
+				image.src = imageSrc;
+				image.alt = `${hallName} preview`;
+				action.href = `/requester-booking.html?room_no=${encodeURIComponent(hall.room_no || '')}`;
+				card.style.cursor = 'pointer';
+				card.addEventListener('click', (event) => {
+					if (event.target.closest('a')) {
+						return;
+					}
+					window.location.href = action.href;
+				});
+
+				hallGrid.appendChild(node);
+			});
+
+			statusMessage.textContent = `${halls.length} hall${halls.length > 1 ? 's' : ''} available right now.`;
+		}
+
+		function applyFilter(halls) {
+			const rangeValue = minCapacityInput.value;
+			if (!rangeValue) {
+				renderCards(halls);
+				return;
+			}
+
+			const filtered = halls.filter((hall) => {
+				const capacity = Number(hall.capacity || 0);
+				if (rangeValue === '5-10') return capacity >= 5 && capacity <= 10;
+				if (rangeValue === '25-50') return capacity >= 25 && capacity <= 50;
+				if (rangeValue === '50-100') return capacity >= 50 && capacity <= 100;
+				if (rangeValue === '100+') return capacity > 100;
+				return true;
+			});
+			renderCards(filtered);
+		}
+
+		async function loadHalls() {
+			try {
+				const response = await fetch('/api/halls', { credentials: 'same-origin' });
+				if (!response.ok) {
+					throw new Error('API unavailable');
+				}
+
+				const halls = await response.json();
+				const normalized = Array.isArray(halls) && halls.length ? halls : fallbackHalls;
+				capacityForm.dataset.halls = JSON.stringify(normalized);
+				renderCards(normalized);
+			} catch (error) {
+				capacityForm.dataset.halls = JSON.stringify(fallbackHalls);
+				renderCards(fallbackHalls);
+				statusMessage.textContent = 'Live halls are unavailable right now. Showing curated halls.';
+			}
+		}
+
+		capacityForm.addEventListener('submit', (event) => {
+			event.preventDefault();
+			const halls = JSON.parse(capacityForm.dataset.halls || '[]');
+			applyFilter(halls);
+		});
+
+		loadHalls();
+	</script>
+</body>
+</html>

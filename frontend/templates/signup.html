@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign Up - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-1: #f3f7ff;
+      --bg-2: #eefbf3;
+      --panel: rgba(255, 255, 255, 0.88);
+      --text: #0f172a;
+      --muted: #64748b;
+      --line: #dbe4ee;
+      --navy: #0f2748;
+      --navy-2: #17375f;
+      --green: #166534;
+      --green-2: #15803d;
+      --shadow: 0 22px 70px rgba(15, 23, 42, 0.12);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at top left, rgba(22, 101, 52, 0.12), transparent 28%),
+        radial-gradient(circle at bottom right, rgba(29, 78, 216, 0.12), transparent 26%),
+        linear-gradient(135deg, var(--bg-1), var(--bg-2));
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+
+    .shell {
+      width: min(1080px, 100%);
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 24px;
+      align-items: stretch;
+    }
+
+    .hero {
+      background: linear-gradient(160deg, var(--navy) 0%, var(--navy-2) 48%, #0b5b38 100%);
+      border-radius: 30px;
+      padding: 32px;
+      color: white;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero::before,
+    .hero::after {
+      content: '';
+      position: absolute;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      filter: blur(8px);
+    }
+
+    .hero::before {
+      width: 180px;
+      height: 180px;
+      top: -40px;
+      right: -30px;
+    }
+
+    .hero::after {
+      width: 240px;
+      height: 240px;
+      bottom: -80px;
+      left: -40px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 14px;
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      backdrop-filter: blur(10px);
+      margin-bottom: 34px;
+    }
+
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.16);
+      display: grid;
+      place-items: center;
+      font-size: 18px;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+
+    .brand-subtitle {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.72);
+      margin-top: 2px;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(34px, 4vw, 54px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+      max-width: 10ch;
+    }
+
+    .hero p {
+      margin: 18px 0 0;
+      max-width: 46ch;
+      font-size: 15px;
+      line-height: 1.7;
+      color: rgba(255, 255, 255, 0.82);
+    }
+
+    .hero-points {
+      margin-top: 28px;
+      display: grid;
+      gap: 12px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .point {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 16px;
+      border-radius: 18px;
+      background: rgba(255, 255, 255, 0.12);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+    }
+
+    .point strong {
+      font-size: 14px;
+    }
+
+    .point span {
+      color: rgba(255, 255, 255, 0.74);
+      font-size: 13px;
+      line-height: 1.45;
+    }
+
+    .form-card {
+      background: var(--panel);
+      border: 1px solid rgba(219, 228, 238, 0.9);
+      backdrop-filter: blur(12px);
+      border-radius: 30px;
+      box-shadow: var(--shadow);
+      padding: 30px;
+    }
+
+    .form-card h2 {
+      margin: 0 0 8px;
+      font-size: 28px;
+      letter-spacing: -0.03em;
+    }
+
+    .form-card .subtitle {
+      margin: 0 0 22px;
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 14px;
+    }
+
+    .error-box {
+      background: #fff1f2;
+      color: #9f1239;
+      border: 1px solid #fecdd3;
+      border-radius: 16px;
+      padding: 12px 14px;
+      margin-bottom: 16px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    form {
+      display: grid;
+      gap: 14px;
+    }
+
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    label {
+      font-size: 13px;
+      font-weight: 700;
+      color: #334155;
+    }
+
+    input,
+    select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font: inherit;
+      background: rgba(255, 255, 255, 0.9);
+      color: var(--text);
+      outline: none;
+      transition: 0.18s ease;
+    }
+
+    input:focus,
+    select:focus {
+      border-color: rgba(29, 78, 216, 0.45);
+      box-shadow: 0 0 0 4px rgba(29, 78, 216, 0.12);
+    }
+
+    .note {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .actions {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+
+    button,
+    .link-btn {
+      border: none;
+      border-radius: 14px;
+      padding: 13px 18px;
+      font: inherit;
+      font-weight: 800;
+      cursor: pointer;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: transform 0.18s ease, box-shadow 0.18s ease, background 0.18s ease;
+    }
+
+    button:hover,
+    .link-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--green), var(--green-2));
+      color: white;
+      box-shadow: 0 14px 28px rgba(22, 101, 52, 0.2);
+      min-width: 160px;
+    }
+
+    .btn-secondary {
+      background: #eef2ff;
+      color: #1d4ed8;
+      border: 1px solid #dbe4ff;
+    }
+
+    .footer-line {
+      margin-top: 18px;
+      padding-top: 16px;
+      border-top: 1px solid #e2e8f0;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .footer-line a {
+      color: var(--navy);
+      font-weight: 800;
+      text-decoration: none;
+    }
+
+    .role-pills {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .pill {
+      padding: 7px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+      background: #eff6ff;
+      color: #1d4ed8;
+    }
+
+    .pill.disabled {
+      background: #f1f5f9;
+      color: #64748b;
+    }
+
+    @media (max-width: 960px) {
+      .shell {
+        grid-template-columns: 1fr;
+      }
+
+      .hero h1 {
+        max-width: none;
+      }
+    }
+
+    @media (max-width: 640px) {
+      body {
+        padding: 14px;
+      }
+
+      .hero,
+      .form-card {
+        padding: 22px;
+        border-radius: 22px;
+      }
+
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+
+      .actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+
+      .btn-primary,
+      .btn-secondary {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="hero">
+      <div class="brand">
+        <div class="brand-mark">🏢</div>
+        <div>
+          <div class="brand-title">{{ config.app_brand if config else 'DSCE' }}</div>
+          <div class="brand-subtitle">Meeting Hall Booking System</div>
+        </div>
+      </div>
+
+      <h1>Create your booking account</h1>
+      <p>Register a requester account to submit room booking requests, track approvals, and manage your meeting schedule in one place.</p>
+
+      <div class="hero-points">
+        <div class="point">
+          <strong>Requester roles only</strong>
+          <span>Self-registration is available for student, staff, and faculty accounts.</span>
+        </div>
+        <div class="point">
+          <strong>Approval workflow</strong>
+          <span>Approver accounts are created only by admin to keep the review chain controlled.</span>
+        </div>
+        <div class="point">
+          <strong>Secure access</strong>
+          <span>Use your registered email to receive OTP-based sign-in when required.</span>
+        </div>
+      </div>
+
+      <div class="role-pills" aria-label="Allowed signup roles">
+        <span class="pill">Student</span>
+        <span class="pill">Staff</span>
+        <span class="pill">Faculty</span>
+        <span class="pill disabled">HOD</span>
+        <span class="pill disabled">Principal</span>
+        <span class="pill disabled">Secretary</span>
+      </div>
+    </section>
+
+    <section class="form-card">
+      <h2>Sign Up</h2>
+      <p class="subtitle">Fill in your details to create a requester account. If you need an approver account, ask the admin to register it for you.</p>
+
+      {% if error %}
+      <div class="error-box">{{ error }}</div>
+      {% endif %}
+
+      <form method="POST" action="/signup" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid-2">
+          <div class="field">
+            <label for="name">Full Name</label>
+            <input id="name" name="name" type="text" required placeholder="Your name">
+          </div>
+          <div class="field">
+            <label for="username">Username</label>
+            <input id="username" name="username" type="text" maxlength="20" required placeholder="Choose a username">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="email">Email</label>
+            <input id="email" name="email" type="email" required placeholder="name@example.com">
+          </div>
+          <div class="field">
+            <label for="phone">Phone</label>
+            <input id="phone" name="phone" type="tel" pattern="\+?[0-9\s-]{7,15}" required placeholder="Enter phone number (required)">
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field">
+            <label for="department">Department</label>
+            <input id="department" name="department" type="text" required placeholder="Department name">
+          </div>
+          <div class="field">
+            <label for="login_type">Account Type</label>
+            <select id="login_type" name="login_type" required>
+              <option value="staff">Staff</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" minlength="6" required placeholder="Create a password">
+          <div class="note">Use at least 6 characters. Your account will be signed in after signup.</div>
+        </div>
+
+        <div class="actions">
+          <button class="btn-primary" type="submit">Create Account</button>
+          <a class="link-btn btn-secondary" href="/login.html">Back to Login</a>
+        </div>
+      </form>
+
+      <div class="footer-line">
+        Already registered? <a href="/login.html">Sign in here</a>.<br>
+        Need a HOD, Principal, or Secretary account? Only the admin can create approver accounts.
+      </div>
+    </section>
+  </div>
+</body>
+</html>

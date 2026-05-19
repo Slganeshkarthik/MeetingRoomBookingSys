@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Meeting Hall Booking System – Book, approve, and manage meeting hall reservations.">
+  <title>{% block title %}{{ config.app_title if config else 'Meeting Hall System' }}{% endblock %}</title>
+
+  <!-- Stylesheet -->
+  <link rel="stylesheet" href="home.css">
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400..700&display=swap" rel="stylesheet">
+
+</head>
+
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img src="{{ config.app_logo_path if config and config.app_logo_path else '/static/logo.png' }}" alt="Logo" />
+      <h1>{{ config.app_brand if config else 'DSCE' }}</h1>
+    </div>
+
+    <div class="actions">
+      {% if user %}
+      <button class="iconbtn" onclick="window.location.href='/profile.html'" title="Profile">
+        👤 <span class="username-text">{{ ((user.name or user.username) or '')[0:1] }}</span>
+      </button>
+      <a class="iconbtn" href="/logout" title="Logout">↩ Logout</a>
+      {% else %}
+      <a class="iconbtn" href="/login.html" title="Login">👤 Login</a>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- ── Navbar ───────────────────────────────────────────── -->
+  <header class="navbar">
+    <div class="brand">{{ config.app_navbar_brand if config else '📅 MeetBook' }}</div>
+    <nav>
+      <a href="/home.html">Home</a>
+      <a href="/gallery.html">Gallery</a>
+      {% if user and ((user.role or '')|lower) in ['hod', 'principal', 'secretary'] %}
+      <a href="/approver-dashboard.html">Approvals Dashboard</a>
+      <a href="/approver-dashboard.html">Pending Requests</a>
+      {% elif user and ((user.role or '')|lower) == 'admin' %}
+      <a href="/admin-analytics.html">Admin Analytics</a>
+      <a href="/admin-mail-health.html">Mail Health</a>
+      {% elif user %}
+      <a href="/requester-dashboard.html">My Dashboard</a>
+      <a href="/requester-dashboard.html">Queue & Suggestions</a>
+      {% else %}
+      <a href="/login.html">Dashboard</a>
+      {% endif %}
+    </nav>
+  </header>
+  <!-- Hero Section -->
+
+  <section class="hero">
+
+    <div class="hero-content">
+
+      <h1><span>Book your meeting room today</span> </h1>
+
+      <p>Smart and easy meeting room booking with approval workflow</p>
+
+      {% if user %}
+      <button class="primary-btn" onclick="window.location.href='/halls.html'">Book Now</button>
+      {% else %}
+      <button class="primary-btn" onclick="window.location.href='/login.html'">Book Now</button>
+      {% endif %}
+
+    </div>
+
+  </section>
+
+
+
+  <!-- Simplified Section -->
+
+  <section class="section">
+    <div class="container">
+
+      <div class="text">
+        <h2>Simplified Room Scheduling</h2>
+        <p>Schedule meetings quickly and avoid conflicts with smart room allocation and availability tracking.</p>
+      </div>
+
+      <div class="image">
+        <img src="https://images.openai.com/static-rsc-4/DicvOLeuKlETYoG9elw5qF5s_yTmCvq55yvmYvuH-lgyxHf1V2mQG28Zt1-iXB-l0Qz0pxdunAraxUKJCNA9RZVEsOrkJB3nHYJtsjrKERbfJ6N1czp1jxDUCdW3aGb9zwxXXEIggwV7AWRwwSxOACw_G2qmwPdHAzfnhi1tN0YgrUudjD3E9dN5OXFs-JXA?purpose=fullsize">
+      </div>
+
+    </div>
+  </section>
+
+
+
+  <!-- Features -->
+
+  <section class="section alt">
+
+    <div class="container">
+
+      <div class="image">
+        <img src="https://images.openai.com/static-rsc-4/Q2tlWfuolH2cxqd2DlUR5mfVaRUnjEEGFc-S9zm866I_vV8n1AJNkxgyU7ZtQJ5-7NTxoSApOid1NSWFEsFYoNmurVkDeKa7aDbHWnyG0adA_csV39nqBOVgg63DDe0uiwH4se4hgO9rdVKEsMmAGkVRqfLuOyVNgjCo06V5SFPP2vuZx2wQO4U3xXLFfs5x?purpose=fullsize">
+      </div>
+
+      <div class="text">
+        <h2>Smart Key Features</h2>
+        <p>Automated approvals, smart notifications, and conflict-free booking for seamless meeting experience.</p>
+      </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- How it Works -->
+
+  <section class="section">
+
+    <div class="container">
+
+    <div class="text">
+    <h2>How It Works</h2>
+    <p>Login, select your room and timeslot, and get instant approval from your department head.</p>
+    </div>
+
+    <div class="image">
+    <img src="https://images.openai.com/static-rsc-4/YiuR9PHpjd2nufXwUwlwZWQbQlk4unywZxB3zgAj6N0ig2Yos2zXadopjK1xEtK0cC85dAbx9ZdaGU_t4VPLYoj9McL8Jt44AT29KkRartTQnXRWiC_bC_PIu-7jD29bvGuURnOBIJnAIIVdmVXzAeqKczrEAdMj57eveUIvf84?purpose=inline">
+    </div>
+
+    </div>
+
+  </section>
+
+
+
+  <!-- Rooms -->
+
+  <section class="section alt">
+
+  <div class="container">
+
+  <div class="image">
+  <img src="https://images.openai.com/static-rsc-4/FmiAxf1smMSzyNTKWH3P1qUfPdZXzDrBBucoEq05clhSgJTR0QvI5DWymPizaaOje_WTYtOoWPMIykhYbY3A_URRxJOWXWW2V6H8b937k0KVUoCJQxLKnRjpqkV8BVH_nsEWgjDf0xGVeNtyc4OwaAceICdm_LyH3I_QKfyl7P_2X2K3YdbQZuexOlpemgWm?purpose=fullsize">
+  </div>
+
+  <div class="text">
+  <h2>Multiple Meeting Rooms</h2>
+  <p>Choose from conference rooms, seminar halls, and small meeting spaces.</p>
+  </div>
+
+  </div>
+
+  </section>
+
+
+
+  <!-- Dashboard Preview -->
+
+  <section class="section">
+
+  <div class="container">
+
+  <div class="text">
+  <h2>Smart Dashboard</h2>
+  <p>Manage approvals, view schedules, and monitor bookings from a central dashboard.</p>
+  </div>
+
+  <div class="image">
+  <img src="https://images.openai.com/static-rsc-4/0zFH5FD5upX3B0kJll2fb-afOnr-1Q2n5vjpSh9yEGxIA3OfsidmilLE44CJdUbsWFsoNQVzAUPou9LYy6Mwq53-xB00qBRVwhlC-FfZmQOUKT4Ilo_E4vG-wQVOon3gqOFdN2JCekDKx5TPdcid_Q7cdtLW_3kkH2RRQDE0kIFLB9xlq7Z75_yqineTNnll?purpose=fullsize">
+  </div>
+
+  </div>
+
+  </section>
+
+
+
+  <!-- Contact -->
+
+<section class="contact">
+
+<h2>Contact Us</h2>
+
+<input type="text" placeholder="Your Name">
+<input type="email" placeholder="Email">
+<textarea placeholder="Message"></textarea>
+
+<button>Submit</button>
+
+</section>
+
+
+
+<!-- Footer -->
+
+<footer>
+
+<p>© 2026 {{ config.app_title if config else 'Meeting Hall System' }} | Meeting Room Booking System</p>
+
+</footer>
+
+
+</body>
+</html>

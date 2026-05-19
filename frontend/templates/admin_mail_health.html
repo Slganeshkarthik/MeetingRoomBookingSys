@@ -1,0 +1,194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Mail Health - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard.css" />
+  <style>
+    .navbar-top {
+      background: white;
+      border-bottom: 1px solid #e5e7eb;
+      padding: 12px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .navbar-nav {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+    }
+    .navbar-nav a {
+      text-decoration: none;
+      color: #374151;
+      font-weight: 500;
+      font-size: 14px;
+      transition: color 0.2s;
+    }
+    .navbar-nav a:hover {
+      color: #3b82f6;
+    }
+    .navbar-nav a.active {
+      color: #3b82f6;
+      border-bottom: 2px solid #3b82f6;
+      padding-bottom: 2px;
+    }
+
+    @media (max-width: 640px) {
+      .navbar-top {
+        flex-direction: column;
+        gap: 10px;
+        padding: 12px 16px;
+        align-items: flex-start;
+      }
+      .navbar-nav {
+        flex-wrap: wrap;
+        gap: 10px 16px;
+      }
+      .navbar-nav a {
+        font-size: 13px;
+      }
+    }
+
+    @media (max-width: 480px) {
+      .navbar-top {
+        padding: 10px 12px;
+      }
+      .navbar-nav {
+        gap: 8px 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Navigation Bar -->
+  <div class="navbar-top">
+    <div style="font-weight: 600; color: #1f2937;">
+      {{ config.app_title if config else 'Meeting Hall System' }}
+    </div>
+    <nav class="navbar-nav">
+      <a href="/admin-dashboard.html">← Back to Dashboard</a>
+      <a href="/admin-analytics.html">Analytics</a>
+      <a href="/admin-config.html">Configuration</a>
+      <a href="/admin-mail-health.html" class="active">Mail Health</a>
+      <a href="/logout">Logout</a>
+    </nav>
+  </div>
+
+  <div class="page">
+    <div class="head">
+      <h1>📧 SMTP Health Check</h1>
+      <div class="actions">
+        <button id="healthBtn" class="btn-primary" type="button">Re-check Health</button>
+      </div>
+    </div>
+
+    <section class="card">
+      <h2>Mail Configuration Status</h2>
+      <div id="healthBox" class="notice">Checking...</div>
+    </section>
+
+    <section class="card">
+      <h2>Send Test Email</h2>
+      <form id="testForm">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <div class="grid">
+          <div>
+            <label for="recipient">Recipient</label>
+            <input id="recipient" type="email" required placeholder="admin@example.com" />
+          </div>
+          <div>
+            <label for="subject">Subject</label>
+            <input id="subject" type="text" value="MeetingRoomBooking SMTP test" required />
+          </div>
+        </div>
+        <label for="body">Body</label>
+        <textarea id="body">If you received this email, SMTP setup is working.</textarea>
+        <div class="actions">
+          <button class="btn-primary" type="submit">Send Test Email</button>
+        </div>
+      </form>
+      <p id="resultLine"></p>
+    </section>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+  <script>
+    const healthBox = document.getElementById('healthBox');
+    const resultLine = document.getElementById('resultLine');
+
+    async function checkHealth() {
+      const res = await fetch('/api/admin/mail/health');
+      const data = await res.json();
+      if (!res.ok) {
+        healthBox.textContent = data.error || 'Health check failed';
+        healthBox.style.background = '#fef2f2';
+        healthBox.style.color = '#991b1b';
+        return;
+      }
+
+      const cfg = data.config || {};
+      healthBox.innerHTML = `
+        <div><strong>Status:</strong> ${data.ok ? 'Healthy' : 'Not Healthy'}</div>
+        <div><strong>Message:</strong> ${data.message || '-'}</div>
+        <div><strong>Server:</strong> ${cfg.mail_server || '-'}</div>
+        <div><strong>Port:</strong> ${cfg.mail_port || '-'}</div>
+        <div><strong>TLS:</strong> ${cfg.mail_use_tls}</div>
+        <div><strong>SSL:</strong> ${cfg.mail_use_ssl}</div>
+        <div><strong>Username set:</strong> ${cfg.has_username}</div>
+        <div><strong>Password set:</strong> ${cfg.has_password}</div>
+      `;
+      if (data.ok) {
+        healthBox.style.background = '#f0fdf4';
+        healthBox.style.color = '#166534';
+      } else {
+        healthBox.style.background = '#fffbeb';
+        healthBox.style.color = '#92400e';
+      }
+    }
+
+    document.getElementById('healthBtn').addEventListener('click', checkHealth);
+
+    document.getElementById('testForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const payload = {
+        recipient: document.getElementById('recipient').value,
+        subject: document.getElementById('subject').value,
+        body: document.getElementById('body').value
+      };
+      const res = await fetch('/api/admin/mail/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      resultLine.textContent = data.message || data.error || 'Done';
+      resultLine.style.color = res.ok ? '#16a34a' : '#dc2626';
+    });
+
+    checkHealth();
+  </script>
+</body>
+</html>

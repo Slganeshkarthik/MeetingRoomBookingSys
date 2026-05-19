@@ -1,0 +1,1437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>User Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f4f7fb;
+      --panel: #ffffff;
+      --line: #dbe4ee;
+      --text: #0f172a;
+      --muted: #64748b;
+      --navy: #0f2748;
+      --navy-2: #17375f;
+      --green: #16a34a;
+      --amber: #f59e0b;
+      --red: #ef4444;
+      --shadow: 0 18px 50px rgba(15, 23, 42, 0.08);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: Inter, sans-serif;
+      background:
+        radial-gradient(circle at top left, rgba(29, 78, 216, 0.08), transparent 28%),
+        radial-gradient(circle at top right, rgba(15, 39, 72, 0.06), transparent 22%),
+        var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      max-width: 100vw;
+      overflow-x: hidden;
+    }
+
+    .sidebar {
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+      border-right: 1px solid var(--line);
+      padding: 24px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 28px;
+      height: 100vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px 12px;
+      border-radius: 16px;
+      background: #eef4ff;
+      border: 1px solid #d8e4ff;
+    }
+
+    .brand-mark {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: var(--navy); color: white;
+      display: grid; place-items: center; font-size: 18px; flex: 0 0 auto;
+    }
+
+    .brand-title { font-weight: 800; font-size: 15px; line-height: 1.1; }
+    .brand-subtitle { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+    .side-section { display: flex; flex-direction: column; gap: 10px; }
+    .side-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.12em; color: #94a3b8; padding: 0 10px; }
+
+    .side-nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    .side-nav a {
+      text-decoration: none;
+      color: #334155;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: 0.18s ease;
+    }
+
+    .side-nav a.active,
+    .side-nav a:hover {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 10px 26px rgba(15, 39, 72, 0.16);
+    }
+
+    .side-nav a .icon { width: 18px; text-align: center; opacity: 0.9; }
+
+    .help-card {
+      margin-top: auto;
+      border-radius: 18px;
+      background: linear-gradient(180deg, var(--navy-2), var(--navy));
+      color: white;
+      padding: 18px;
+      font-size: 12px;
+      line-height: 1.5;
+      box-shadow: var(--shadow);
+    }
+    .help-card .rl { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: rgba(255,255,255,0.7); margin-bottom: 8px; }
+    .help-card .rn { font-size: 18px; font-weight: 800; margin-bottom: 4px; }
+    .help-card .rm { color: rgba(255,255,255,0.76); font-size: 13px; }
+
+    .main {
+      padding: 16px 20px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-x: hidden;
+      min-width: 0;
+    }
+
+    .topbar {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: white;
+      min-height: 52px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 14px;
+      box-shadow: var(--shadow);
+    }
+
+    .top-links {
+      display: flex;
+      gap: 24px;
+      align-items: center;
+      font-size: 13px;
+      font-weight: 700;
+      color: #60738d;
+    }
+
+    .top-links a {
+      color: inherit;
+      text-decoration: none;
+      position: relative;
+      padding: 4px 0;
+    }
+
+    .top-links a.active {
+      color: var(--navy);
+    }
+
+    .top-links a.active::after {
+      content: '';
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: -11px;
+      height: 3px;
+      border-radius: 999px;
+      background: var(--navy);
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #5d738f;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--navy);
+      font-size: 20px;
+      cursor: pointer;
+      transition: background 0.2s ease, border-color 0.2s ease;
+    }
+
+    .sidebar-toggle:hover {
+      background: #f3f4f6;
+      border-color: #cfd8e4;
+    }
+
+    .sidebar-overlay {
+      display: none;
+    }
+
+    body.sidebar-locked {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      background: linear-gradient(140deg, #0f355f, #2c6a8f);
+      color: white;
+      font-size: 12px;
+      font-weight: 700;
+      display: grid;
+      place-items: center;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: flex-start;
+      flex-wrap: wrap;
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(34px, 4vw, 56px);
+      line-height: 0.95;
+      letter-spacing: -0.05em;
+    }
+
+    .hero p {
+      margin: 12px 0 0;
+      color: #6f8298;
+      font-weight: 600;
+      line-height: 1.6;
+    }
+
+    .new-booking {
+      text-decoration: none;
+      border-radius: 10px;
+      background: var(--navy);
+      color: white;
+      font-weight: 800;
+      font-size: 14px;
+      padding: 12px 18px;
+      box-shadow: 0 12px 28px rgba(11, 42, 82, 0.2);
+      white-space: nowrap;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .stat {
+      border-radius: 18px;
+      border: 1px solid rgba(219,228,238,.9);
+      background: white;
+      padding: 16px;
+      min-height: 118px;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+
+    .stat::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 3px;
+      background: #d6e1ef;
+    }
+
+    .stat.pending::before { background: #f4c046; }
+    .stat.approved::before { background: #2ecf8b; }
+    .stat.rejected::before { background: #ef4444; }
+
+    .stat h3 {
+      margin: 12px 0 4px;
+      font-size: 29px;
+      line-height: 1;
+      text-align: right;
+      letter-spacing: -0.04em;
+    }
+
+    .stat .label {
+      font-size: 30px;
+      font-weight: 800;
+      color: var(--text);
+      letter-spacing: -0.03em;
+    }
+
+    .stat .meta {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .stat.total {
+      background: linear-gradient(150deg, #0b2a52, #133b6b);
+      color: white;
+      border: none;
+    }
+
+    .stat.total .label,
+    .stat.total .meta,
+    .stat.total h3 { color: white; }
+
+    .stat.total::before {
+      background: rgba(255, 255, 255, 0.35);
+    }
+
+    .table-card {
+      border-radius: 22px;
+      border: 1px solid rgba(219,228,238,.9);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      max-width: 100%;
+    }
+
+    .table-head {
+      padding: 18px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .table-head h2 {
+      margin: 0;
+      font-size: 34px;
+      letter-spacing: -0.04em;
+      line-height: 1;
+    }
+
+    .table-head p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .filters {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .filters input {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 12px;
+      min-width: 230px;
+      font: inherit;
+      font-size: 13px;
+      color: #375474;
+      outline: none;
+      background: #f9fbfd;
+    }
+
+    .filters button {
+      border: 1px solid var(--line);
+      background: #f9fbfd;
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-weight: 700;
+      color: #597694;
+      cursor: pointer;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+
+    @media (min-width: 800px) {
+      table {
+        min-width: 760px;
+      }
+    }
+
+    th, td {
+      text-align: left;
+      padding: 12px 16px;
+      border-bottom: 1px solid #edf2f7;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #7f90a5;
+      font-weight: 800;
+      font-size: 10px;
+      background: #fbfdff;
+    }
+
+    .hall-title {
+      font-weight: 800;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+      margin-bottom: 2px;
+    }
+
+    .sub {
+      color: #7487a0;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .date-main,
+    .time-main {
+      font-weight: 800;
+      font-size: 14px;
+      color: #234266;
+    }
+
+    .badge {
+      display: inline-flex;
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: currentColor;
+    }
+
+    .badge-approved { background: #ebfaf1; color: var(--green); }
+    .badge-pending { background: #fff7e6; color: var(--amber); }
+    .badge-rejected { background: #fef1f2; color: var(--red); }
+    .badge-other { background: #eef3fa; color: #5b7796; }
+
+    .action-link {
+      border: none;
+      background: none;
+      color: #123f70;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 13px;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .table-foot {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 12px 16px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .pagination {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .details-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(8, 20, 38, 0.5);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 18px;
+      z-index: 60;
+    }
+
+    .details-backdrop.show {
+      display: flex;
+    }
+
+    .details-card {
+      width: min(520px, 100%);
+      border-radius: 18px;
+      background: white;
+      border: 1px solid var(--line);
+      box-shadow: 0 24px 60px rgba(10, 33, 66, 0.22);
+      overflow: hidden;
+    }
+
+    .details-head {
+      padding: 16px 18px;
+      background: linear-gradient(135deg, #0b2a52, #123a6b);
+      color: white;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .details-head h3 {
+      margin: 0;
+      font-size: 18px;
+      letter-spacing: -0.03em;
+    }
+
+    .details-close {
+      border: none;
+      background: rgba(255, 255, 255, 0.16);
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 999px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 800;
+    }
+
+    .details-body {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .details-row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 12px;
+      align-items: start;
+      border-bottom: 1px solid #edf2f7;
+      padding-bottom: 10px;
+    }
+
+    .details-row:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .details-label {
+      color: #74869e;
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+
+    .details-value {
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.55;
+      word-break: break-word;
+    }
+
+    .details-actions {
+      padding: 0 18px 18px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    .details-actions .btn {
+      min-width: 96px;
+    }
+
+    .btn.secondary {
+      border: 1px solid var(--line);
+      background: #f8fbff;
+      color: #476588;
+      border-radius: 9px;
+      padding: 11px 14px;
+      font-size: 13px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    .page-btn {
+      border: 1px solid var(--line);
+      background: white;
+      color: #4a698a;
+      border-radius: 6px;
+      min-width: 30px;
+      height: 30px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .page-btn.active {
+      background: var(--navy);
+      color: white;
+      border-color: var(--navy);
+    }
+
+    .empty {
+      text-align: center;
+      color: #8ca0b8;
+      padding: 24px;
+      font-weight: 700;
+    }
+
+    @media (max-width: 980px) {
+      .layout { grid-template-columns: 1fr; }
+      .sidebar {
+        display: block;
+        position: fixed;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        width: 260px;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease;
+        z-index: 1001;
+      }
+      .layout.sidebar-open .sidebar { transform: translateX(0); }
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.4);
+        z-index: 1000;
+      }
+      .layout.sidebar-open .sidebar-overlay { display: block; }
+      .sidebar-toggle { display: inline-flex; }
+      .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .help-card { display: none; }
+    }
+
+    @media (max-width: 768px) {
+      .main {
+        padding: 18px 16px 28px;
+        gap: 18px;
+      }
+
+      .topbar {
+        padding: 10px 14px;
+        min-height: 48px;
+        border-radius: 14px;
+      }
+
+      .top-links {
+        gap: 18px;
+        font-size: 14px;
+      }
+
+      .top-actions {
+        gap: 8px;
+      }
+
+      /* Hide the "!" notification span and logout text on mobile */
+      .top-actions > span {
+        display: none;
+      }
+      .top-actions > a[href="/logout"] {
+        display: none;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      .stat {
+        min-height: 100px;
+        padding: 14px;
+        border-radius: 14px;
+      }
+
+      .stat .label {
+        font-size: 22px;
+      }
+
+      .stat h3 {
+        font-size: 22px;
+      }
+
+      .stat .meta {
+        font-size: 11px;
+      }
+
+      .hero h1 {
+        font-size: clamp(28px, 6vw, 42px);
+      }
+
+      .hero p {
+        font-size: 14px;
+      }
+
+      .table-head h2 {
+        font-size: 26px;
+      }
+
+      .filters input {
+        min-width: 180px;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .main {
+        padding: 14px 14px 24px;
+        gap: 16px;
+      }
+
+      .topbar {
+        padding: 12px 14px;
+        min-height: auto;
+      }
+
+      .top-links {
+        gap: 16px;
+        font-size: 14px;
+      }
+
+      .top-links a.active::after {
+        bottom: -8px;
+      }
+
+      .top-actions {
+        gap: 8px;
+      }
+
+      /* Hide approver back link on small screens */
+      .top-actions > a[href="/approver-dashboard.html"] {
+        display: none;
+      }
+
+      .hero {
+        flex-direction: column;
+        gap: 14px;
+        align-items: stretch;
+      }
+
+      .hero h1 {
+        font-size: clamp(26px, 7vw, 36px);
+      }
+
+      .hero p {
+        font-size: 14px;
+        margin-top: 8px;
+      }
+
+      .new-booking {
+        text-align: center;
+        padding: 14px 18px;
+        border-radius: 12px;
+        font-size: 15px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+        gap: 12px;
+      }
+
+      .stat {
+        min-height: auto;
+        padding: 18px 20px;
+        border-radius: 16px;
+      }
+
+      .stat h3 {
+        font-size: 28px;
+      }
+
+      .stat .label {
+        font-size: 14px;
+      }
+
+      .stat .meta {
+        font-size: 12px;
+      }
+
+      .table-card {
+        border-radius: 16px;
+        overflow-x: auto;
+      }
+
+      .table-head {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 12px;
+        padding: 16px 18px;
+      }
+
+      .table-head h2 {
+        font-size: 22px;
+      }
+
+      .table-head p {
+        font-size: 13px;
+      }
+
+      .filters {
+        flex-direction: column;
+        gap: 8px;
+      }
+
+      .filters input {
+        min-width: 0;
+        width: 100%;
+      }
+
+      .filters button {
+        width: 100%;
+      }
+
+      .table-foot {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 14px 16px;
+      }
+
+      .details-row {
+        grid-template-columns: 1fr;
+        gap: 4px;
+      }
+
+      .details-card {
+        border-radius: 16px;
+      }
+    }
+
+    @media (max-width: 400px) {
+      .main {
+        padding: 12px 10px 20px;
+        gap: 14px;
+      }
+
+      .topbar {
+        padding: 10px 12px;
+        border-radius: 12px;
+      }
+
+      .top-links {
+        gap: 14px;
+        font-size: 13px;
+      }
+
+      .hero h1 {
+        font-size: 24px;
+      }
+
+      .hero p {
+        font-size: 13px;
+      }
+
+      .new-booking {
+        font-size: 14px;
+        padding: 12px 16px;
+      }
+
+      .stat {
+        padding: 16px;
+      }
+
+      .stat h3 {
+        font-size: 24px;
+      }
+
+      .stat .label {
+        font-size: 15px;
+      }
+
+      .table-head {
+        padding: 14px 14px;
+      }
+
+      .table-head h2 {
+        font-size: 20px;
+      }
+
+      th, td {
+        padding: 10px 8px;
+        font-size: 12px;
+      }
+
+      .hall-title {
+        font-size: 15px;
+      }
+
+      .badge {
+        font-size: 9px;
+        padding: 4px 8px;
+      }
+
+      .action-link {
+        font-size: 12px;
+      }
+
+      .page-btn {
+        min-width: 28px;
+        height: 28px;
+        font-size: 11px;
+      }
+
+      .details-head h3 {
+        font-size: 16px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">🏛</div>
+        <div>
+          <div class="brand-title">{{ config.app_title if config else 'Meeting Hall System' }}</div>
+          <div class="brand-subtitle">{{ config.app_brand if config else 'DSCE' }}</div>
+        </div>
+      </div>
+      <div class="side-section">
+        <div class="side-label">Navigation</div>
+        <nav class="side-nav">
+          <a class="active" href="/requester-dashboard.html"><span class="icon">▣</span>Dashboard</a>
+          <a href="/halls.html"><span class="icon">＋</span>New Booking</a>
+          <a href="/halls.html"><span class="icon">🏢</span>Halls</a>
+          {% if user and ((user.role or '')|lower) in ['hod', 'principal', 'secretary'] %}
+          <a href="/approver-dashboard.html"><span class="icon">✅</span>Approvals</a>
+          {% endif %}
+          <a href="/settings.html"><span class="icon">⚙</span>Settings</a>
+          <a href="/logout" style="color: #dc2626;"><span class="icon">🚪</span>Logout</a>
+        </nav>
+      </div>
+      <div class="help-card">
+        <div class="rl">Current Role</div>
+        <div class="rn">{{ ((user.role or 'User')|upper) if user else 'USER' }}</div>
+        <div class="rm">{{ ((user.name or user.username) if user else 'User') }}</div>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-overlay></div>
+
+    <main class="main">
+      <header class="topbar">
+        <div class="top-links">
+          <a class="active" href="/requester-dashboard.html">Dashboard</a>
+          <a href="/halls.html">Halls</a>
+        </div>
+        <div class="top-actions">
+          {% if user and ((user.role or '')|lower) in ['hod', 'principal', 'secretary'] %}
+          <a href="/approver-dashboard.html" style="text-decoration:none;color:#0b2a52;font-weight:800;font-size:12px;border:1px solid #d7e2ee;padding:6px 10px;border-radius:8px;background:#f8fbff;">Back to Approver Dashboard</a>
+          {% endif %}
+          <span>!</span>
+          <div class="avatar">{{ ((user.name or user.username) if user else 'U')[0:1]|upper }}</div>
+          <a href="/logout" style="text-decoration:none;color:#5d738f;font-weight:800;font-size:12px;">Logout</a>
+          <button class="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-sidebar-toggle>⋮</button>
+        </div>
+      </header>
+
+      <section class="hero">
+        <div>
+          <h1 id="welcomeTitle" data-raw-name="{{ ((user.name or user.username) if user else 'User')|e }}">Welcome back.</h1>
+          <p>Your institutional dashboard for managing event spaces and scheduling academic halls.</p>
+        </div>
+        <a class="new-booking" href="/halls.html">+ New Booking</a>
+      </section>
+
+      <section class="stats">
+        <article class="stat pending">
+          <h3 id="pendingCount">0</h3>
+          <div class="label">Pending Review</div>
+          <div class="meta">Awaiting departmental approval</div>
+        </article>
+        <article class="stat approved">
+          <h3 id="approvedCount">0</h3>
+          <div class="label">Approved Slots</div>
+          <div class="meta">Upcoming scheduled events</div>
+        </article>
+        <article class="stat rejected">
+          <h3 id="rejectedCount">0</h3>
+          <div class="label">Rejected</div>
+          <div class="meta">Requests declined</div>
+        </article>
+        <article class="stat total">
+          <h3 id="totalCount">0</h3>
+          <div class="label">Total Bookings</div>
+          <div class="meta">Full booking history</div>
+        </article>
+      </section>
+
+      <section class="table-card">
+        <div class="table-head">
+          <div>
+            <h2>My Recent Bookings</h2>
+            <p>Real-time status of your latest requests</p>
+          </div>
+          <div class="filters">
+            <input id="searchInput" type="search" placeholder="Filter bookings...">
+            <button id="clearFilterBtn" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Hall Name</th>
+                <th>Event Date</th>
+                <th>Schedule</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="bookingRows"></tbody>
+          </table>
+        </div>
+
+        <div class="table-foot">
+          <div id="resultsMeta">Showing 0 bookings</div>
+          <div id="pagination" class="pagination"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="bookingDetailsBackdrop" class="details-backdrop" role="dialog" aria-modal="true" aria-labelledby="bookingDetailsTitle">
+    <div class="details-card">
+      <div class="details-head">
+        <h3 id="bookingDetailsTitle">Booking Details</h3>
+        <button type="button" class="details-close" id="closeDetailsBtn" aria-label="Close details">&times;</button>
+      </div>
+      <div class="details-body" id="bookingDetailsBody"></div>
+      <div class="details-actions">
+        <button type="button" class="btn secondary" id="detailsOkBtn">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+  <script>
+    const bookingRows = document.getElementById('bookingRows');
+    const searchInput = document.getElementById('searchInput');
+    const clearFilterBtn = document.getElementById('clearFilterBtn');
+    const resultsMeta = document.getElementById('resultsMeta');
+    const pagination = document.getElementById('pagination');
+    const pendingCountEl = document.getElementById('pendingCount');
+    const approvedCountEl = document.getElementById('approvedCount');
+    const rejectedCountEl = document.getElementById('rejectedCount');
+    const totalCountEl = document.getElementById('totalCount');
+    const bookingDetailsBackdrop = document.getElementById('bookingDetailsBackdrop');
+    const bookingDetailsBody = document.getElementById('bookingDetailsBody');
+    const closeDetailsBtn = document.getElementById('closeDetailsBtn');
+    const detailsOkBtn = document.getElementById('detailsOkBtn');
+
+    const PAGE_SIZE = 6;
+    let hallsByRoom = {};
+    let allBookings = [];
+    let filteredBookings = [];
+    let currentPage = 1;
+
+    function parseLocalDate(value) {
+      if (!value) return null;
+      // Flask jsonify serializes naive datetimes as "Thu, 23 Apr 2026 07:30:00 GMT"
+      // but the stored times are actually local times (IST), not UTC.
+      // Strip timezone suffixes and parse as local time.
+      let str = String(value).trim();
+      // Remove trailing "GMT", "UTC", or "Z" so JS treats it as local
+      str = str.replace(/\s*(GMT|UTC|Z)$/i, '');
+      const d = new Date(str);
+      return Number.isNaN(d.getTime()) ? null : d;
+    }
+
+    function fmtDate(value) {
+      if (!value) return '-';
+      const d = parseLocalDate(value);
+      if (!d) return String(value);
+      return d.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' });
+    }
+
+    function fmtWeekday(value) {
+      if (!value) return '-';
+      const d = parseLocalDate(value);
+      if (!d) return '-';
+      return d.toLocaleDateString(undefined, { weekday: 'long' });
+    }
+
+    function fmtTimeRange(start, end) {
+      const s = parseLocalDate(start);
+      const e = parseLocalDate(end);
+      if (!s || !e) return '-';
+      return `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    }
+
+    function statusClass(status) {
+      const value = String(status || '').toLowerCase();
+      if (value === 'approved') return 'badge-approved';
+      if (value.includes('pending') || value === 'waitlisted') return 'badge-pending';
+      if (value === 'rejected' || value === 'expired') return 'badge-rejected';
+      return 'badge-other';
+    }
+
+    function normalize(text) {
+      return String(text || '').toLowerCase();
+    }
+
+    function hallName(roomNo) {
+      const hall = hallsByRoom[String(roomNo)];
+      return hall ? (hall.hall_name || `Room ${roomNo}`) : `Room ${roomNo}`;
+    }
+
+    function updateWelcome() {
+      const title = document.getElementById('welcomeTitle');
+      const rawName = (title && title.dataset && title.dataset.rawName) ? title.dataset.rawName : 'User';
+      title.textContent = `Welcome back, ${rawName}.`;
+    }
+
+    function showBookingDetails(detailsHtml) {
+      bookingDetailsBody.innerHTML = detailsHtml;
+      bookingDetailsBackdrop.classList.add('show');
+    }
+
+    function hideBookingDetails() {
+      bookingDetailsBackdrop.classList.remove('show');
+    }
+
+    function updateStats() {
+      const total = allBookings.length;
+      const approved = allBookings.filter(b => String(b.request_status || '').toLowerCase() === 'approved').length;
+      const pending = allBookings.filter(b => {
+        const s = String(b.request_status || '').toLowerCase();
+        return s.includes('pending') || s === 'waitlisted';
+      }).length;
+      const rejected = allBookings.filter(b => String(b.request_status || '').toLowerCase() === 'rejected').length;
+
+      totalCountEl.textContent = String(total);
+      approvedCountEl.textContent = String(approved);
+      rejectedCountEl.textContent = String(rejected);
+      pendingCountEl.textContent = String(pending);
+    }
+
+    function fmtDateTime(v) {
+      const d = parseLocalDate(v);
+      return d ? d.toLocaleString() : (v || '-');
+    }
+
+    function buildDetailsHtml(item) {
+      const hall = hallName(item.room_no);
+
+      const rows = [
+        ['Booking', item.booking_id || '-'],
+        ['Request ID', item.request_id || '-'],
+        ['Hall', hall],
+        ['Contact', item.requester_phone || item.phone || '-'],
+        ['Purpose', item.purpose || '-'],
+        ['Status', item.request_status || '-'],
+        ['Start', fmtDateTime(item.requested_start)],
+        ['End', fmtDateTime(item.requested_end)],
+        ['Queue', item.queue_position || '-'],
+        item.suggested_start ? ['Suggestion', `${fmtDateTime(item.suggested_start)} to ${fmtDateTime(item.suggested_end)}`] : null,
+        item.finalized_at ? ['Confirmed At', fmtDateTime(item.finalized_at)] : null
+      ];
+
+      if (item.user_comment) {
+          rows.push(['User Comment', item.user_comment]);
+      }
+      if (item.all_comments && item.all_comments.length > 0) {
+          item.all_comments.forEach(c => {
+              rows.push([`${String(c.role || 'Approver').toUpperCase()} Comment`, c.comment || '-']);
+          });
+      }
+
+      let html = rows.filter(Boolean)
+        .map(([label, value]) => `
+          <div class="details-row">
+            <div class="details-label">${label}</div>
+            <div class="details-value">${String(value)}</div>
+          </div>
+        `)
+        .join('');
+        
+      html += `
+        <div class="details-row" style="margin-top: 10px; display: block; border-top: 1px solid #e2e8f0; padding-top: 10px;">
+          <div class="details-label" style="margin-bottom: 5px;">Supporting Document</div>
+          <div class="details-value">
+            ${item.document_path ? `<a href="${item.document_path}" target="_blank" rel="noopener" download style="color:#0b2a52; font-weight:600; text-decoration:underline;">View/Download Current Document</a><br><br>` : 'No document uploaded.<br><br>'}
+            <form onsubmit="updateDocument(event, ${item.request_id})" enctype="multipart/form-data" style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+               <input type="file" name="supporting_document" accept=".pdf,.doc,.docx,.jpg,.png" required style="font-size: 12px; max-width: 200px;">
+               <button type="submit" class="btn secondary" style="padding: 6px 12px; font-size: 12px; min-width: auto; height:auto;">Update Document</button>
+            </form>
+          </div>
+        </div>
+      `;
+      return html;
+    }
+
+    async function updateDocument(event, requestId) {
+        event.preventDefault();
+        const form = event.target;
+        const btn = form.querySelector('button[type="submit"]');
+        const originalText = btn.textContent;
+        btn.textContent = "Uploading...";
+        btn.disabled = true;
+
+        const formData = new FormData(form);
+        try {
+            const res = await fetch(`/api/bookings/${requestId}/update-document`, {
+                method: 'POST',
+                body: formData
+            });
+            const result = await res.json();
+            if (res.ok && result.ok) {
+                alert("Document updated successfully!");
+                loadBookings();
+                hideBookingDetails();
+            } else {
+                alert(result.error || "Failed to update document.");
+            }
+        } catch (e) {
+            alert("Error updating document.");
+        } finally {
+            btn.textContent = originalText;
+            btn.disabled = false;
+        }
+    }
+
+    function applyFilter() {
+      const q = normalize(searchInput.value.trim());
+      if (!q) {
+        filteredBookings = [...allBookings];
+      } else {
+        filteredBookings = allBookings.filter(item => {
+          const hall = normalize(hallName(item.room_no));
+          const purpose = normalize(item.purpose);
+          const status = normalize(item.request_status);
+          const bookingId = normalize(item.booking_id);
+          return hall.includes(q) || purpose.includes(q) || status.includes(q) || bookingId.includes(q);
+        });
+      }
+
+      currentPage = 1;
+      renderTable();
+    }
+
+    function renderPagination(totalPages) {
+      pagination.innerHTML = '';
+      if (totalPages <= 1) return;
+
+      for (let i = 1; i <= totalPages; i += 1) {
+        const btn = document.createElement('button');
+        btn.className = 'page-btn' + (i === currentPage ? ' active' : '');
+        btn.type = 'button';
+        btn.textContent = String(i);
+        btn.addEventListener('click', () => {
+          currentPage = i;
+          renderTable();
+        });
+        pagination.appendChild(btn);
+      }
+    }
+
+    function renderTable() {
+      const total = filteredBookings.length;
+      const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+      if (currentPage > totalPages) currentPage = totalPages;
+
+      const start = (currentPage - 1) * PAGE_SIZE;
+      const pageRows = filteredBookings.slice(start, start + PAGE_SIZE);
+
+      if (pageRows.length === 0) {
+        bookingRows.innerHTML = '<tr><td colspan="5" class="empty">No bookings found.</td></tr>';
+      } else {
+        bookingRows.innerHTML = pageRows.map(item => {
+          const hall = hallName(item.room_no);
+          const status = String(item.request_status || 'Unknown');
+          const badge = statusClass(status);
+          const details = buildDetailsHtml(item);
+
+          return `
+            <tr>
+              <td>
+                <div class="hall-title">${hall}</div>
+                <div class="sub">Room ${item.room_no || '-'}</div>
+              </td>
+              <td>
+                <div class="date-main">${fmtDate(item.requested_start)}</div>
+                <div class="sub">${fmtWeekday(item.requested_start)}</div>
+              </td>
+              <td>
+                <div class="time-main">${fmtTimeRange(item.requested_start, item.requested_end)}</div>
+                <div class="sub">${item.duration_minutes || '-'} mins</div>
+              </td>
+              <td>
+                <span class="badge ${badge}">${status}</span>
+                <div class="sub" style="margin-top:4px;">Submitted: ${fmtDateTime(item.submitted_at)}</div>
+              </td>
+              <td><button class="action-link" data-details="${encodeURIComponent(details)}" type="button">View Details</button></td>
+            </tr>
+          `;
+        }).join('');
+
+        bookingRows.querySelectorAll('button[data-details]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const details = decodeURIComponent(btn.getAttribute('data-details') || '');
+            showBookingDetails(details || '<div class="details-row"><div class="details-label">Info</div><div class="details-value">No details available.</div></div>');
+          });
+        });
+      }
+
+      if (total === 0) {
+        resultsMeta.textContent = 'Showing 0 bookings';
+      } else {
+        const shownEnd = Math.min(start + PAGE_SIZE, total);
+        resultsMeta.textContent = `Showing ${start + 1}-${shownEnd} of ${total} bookings`;
+      }
+
+      renderPagination(totalPages);
+    }
+
+    async function loadHalls() {
+      try {
+        const res = await fetch('/api/halls', { headers: { Accept: 'application/json' } });
+        if (!res.ok) return;
+        const halls = await res.json();
+        hallsByRoom = {};
+        (Array.isArray(halls) ? halls : []).forEach(h => {
+          hallsByRoom[String(h.room_no)] = h;
+        });
+      } catch (e) {
+        hallsByRoom = {};
+      }
+    }
+
+    async function loadBookings() {
+      try {
+        const res = await fetch('/api/bookings/my', { headers: { Accept: 'application/json' } });
+        const rows = await res.json();
+        if (!res.ok || !Array.isArray(rows)) {
+          allBookings = [];
+        } else {
+          allBookings = rows;
+        }
+      } catch (e) {
+        allBookings = [];
+      }
+
+      updateStats();
+      applyFilter();
+    }
+
+    searchInput.addEventListener('input', applyFilter);
+    clearFilterBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      applyFilter();
+    });
+
+    closeDetailsBtn.addEventListener('click', hideBookingDetails);
+    detailsOkBtn.addEventListener('click', hideBookingDetails);
+    bookingDetailsBackdrop.addEventListener('click', (event) => {
+      if (event.target === bookingDetailsBackdrop) {
+        hideBookingDetails();
+      }
+    });
+
+    updateWelcome();
+    loadHalls().then(loadBookings);
+    (function setupSidebarToggle() {
+      const layout = document.querySelector('.layout');
+      const toggleButton = document.querySelector('[data-sidebar-toggle]');
+      const overlay = document.querySelector('[data-sidebar-overlay]');
+
+      function setSidebarOpen(isOpen) {
+        if (!layout || !toggleButton) {
+          return;
+        }
+        layout.classList.toggle('sidebar-open', isOpen);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('sidebar-locked', isOpen);
+      }
+
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => {
+          const isOpen = layout && layout.classList.contains('sidebar-open');
+          setSidebarOpen(!isOpen);
+        });
+      }
+
+      if (overlay) {
+        overlay.addEventListener('click', () => setSidebarOpen(false));
+      }
+
+      document.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 980) {
+            setSidebarOpen(false);
+          }
+        });
+      });
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta name="csrf-token" content="{{ csrf_token() }}">
+	<meta name="description" content="Book your preferred time slot for a meeting hall.">
+	<title>{{ config.app_title if config else 'Meeting Hall System' }} - Book a Slot</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@500;600;700;800&display=swap" rel="stylesheet">
+	<link rel="stylesheet" href="/static/booking.css">
+</head>
+<body>
+	<div class="booking-page">
+		<!-- ─── Top Bar ─── -->
+		<header class="top-shell">
+			<div class="brand-mark">Book Sphere</div>
+			<nav class="top-nav" aria-label="Primary navigation">
+				<a href="/requester-dashboard.html">Dashboard</a>
+				<a href="/halls.html">Halls</a>
+				<a href="/requester-booking.html" class="active">Book</a>
+			</nav>
+			<div class="top-tools">
+				<a href="/halls.html" class="icon-round" title="Browse halls" aria-label="Browse halls">◫</a>
+				<a href="/logout" class="profile-chip" title="Logout" aria-label="Logout">
+					<span>{{ ((user.name or user.username) or 'U')[0:1] if user else 'U' }}</span>
+				</a>
+			</div>
+		</header>
+
+		<main>
+			<!-- ─── Page Header ─── -->
+			<section class="page-header" id="pageHeader">
+				<p class="kicker">BOOK YOUR SLOTS</p>
+				<h1 id="hallTitle">Loading hall…</h1>
+				<div class="hall-meta" id="hallMeta"></div>
+			</section>
+
+			<!-- ─── Date Ribbon ─── -->
+			<section class="date-ribbon-wrap" aria-label="Select a date">
+				<div class="date-ribbon" id="dateRibbon"></div>
+			</section>
+
+			<!-- ─── Controls Row ─── -->
+			<section class="controls-row">
+				<div class="duration-section">
+					<label>Duration</label>
+					<span style="font-size:12px; color:#888; font-weight:600;">Duration of the slots</span>
+					<div class="duration-control">
+						<button type="button" id="durMinus" aria-label="Decrease duration">−</button>
+						<span class="dur-label" id="durLabel">1 hr</span>
+						<button type="button" id="durPlus" aria-label="Increase duration">+</button>
+					</div>
+				</div>
+				<div class="session-tabs" role="tablist">
+					<button type="button" class="session-tab active" role="tab" data-session="morning" id="tabMorning">Morning</button>
+					<button type="button" class="session-tab" role="tab" data-session="evening" id="tabEvening">Evening</button>
+				</div>
+			</section>
+
+			<!-- ─── Legend ─── -->
+			<div class="slot-legend">
+				<div class="legend-item"><span class="legend-dot green"></span>Available</div>
+				<div class="legend-item"><span class="legend-dot yellow"></span>HOD Approved</div>
+				<div class="legend-item"><span class="legend-dot orange"></span>Principal Approved</div>
+				<div class="legend-item"><span class="legend-dot red"></span>Fully Booked</div>
+			</div>
+
+			<!-- ─── Slot Grid ─── -->
+			<div class="slot-grid" id="slotGrid" aria-live="polite">
+				<!-- Skeleton loaders while fetching -->
+				<div class="skeleton skeleton-slot"></div>
+				<div class="skeleton skeleton-slot"></div>
+				<div class="skeleton skeleton-slot"></div>
+				<div class="skeleton skeleton-slot"></div>
+			</div>
+
+			<!-- ─── Slot Detail Panel ─── -->
+			<section class="slot-detail-panel" id="slotDetailPanel" aria-label="Slot details">
+				<h3 id="detailTitle">Slot Details</h3>
+				<p class="detail-time" id="detailTime"></p>
+				<div class="waitlist-entries" id="waitlistEntries"></div>
+			</section>
+
+			<!-- ─── Selected Slots Summary ─── -->
+			<section class="selected-slots-tray" id="selectedSlotsTray">
+				<div class="tray-header">
+					<h3>📋 Selected Slots <span class="tray-count" id="trayCount">0</span></h3>
+					<button type="button" class="btn-clear-all" id="btnClearAll">Clear All</button>
+				</div>
+				<div class="tray-chips" id="trayChips"></div>
+			</section>
+
+			<!-- ─── Booking Form ─── -->
+			<section class="booking-form-section" id="bookingFormSection">
+				<h3>Complete Your Booking</h3>
+				<form id="bookingForm" enctype="multipart/form-data" autocomplete="off">
+					<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+					<input type="hidden" name="room_no" id="formRoomNo">
+					<input type="hidden" name="start_datetime" id="formStart">
+					<input type="hidden" name="end_datetime" id="formEnd">
+					<input type="hidden" name="time_slots" id="formTimeSlots">
+
+					<div class="form-grid">
+						<div class="form-group full-width">
+							<label for="formPurpose">Purpose *</label>
+							<input type="text" id="formPurpose" name="purpose" required placeholder="e.g. Department meeting, Workshop, Seminar">
+						</div>
+						<div class="form-group">
+							<label for="formPersons">Number of Persons *</label>
+							<input type="number" id="formPersons" name="number_of_persons" min="1" required placeholder="e.g. 50">
+						</div>
+						<div class="form-group">
+							<label for="formEquipment">Equipment Needed</label>
+							<input type="text" id="formEquipment" name="required_equipment" placeholder="e.g. Projector, Mic, Whiteboard">
+						</div>
+						<div class="form-group full-width">
+							<label for="formUserComment">Comment (optional)</label>
+							<textarea id="formUserComment" name="user_comment" placeholder="Any additional information or comments..."></textarea>
+						</div>
+						<div class="form-group full-width">
+							<label for="formDocument">Supporting Document (optional)</label>
+							<input type="file" id="formDocument" name="supporting_document" accept=".pdf,.doc,.docx,.jpg,.png">
+						</div>
+					</div>
+
+					<div class="form-actions">
+						<button type="button" class="btn-secondary" id="btnCancel">Cancel</button>
+						<button type="submit" class="btn-primary" id="btnSubmit">Confirm Booking</button>
+					</div>
+				</form>
+			</section>
+		</main>
+
+		<!-- ─── Footer ─── -->
+		<footer class="footer-shell">
+			<div>
+				<h3>Academia Arena</h3>
+				<p>© 2026 Academia Arena. All rights reserved.</p>
+			</div>
+			<div class="footer-links">
+				<a href="/home.html">Home</a>
+				<a href="/requester-dashboard.html">Dashboard</a>
+				<a href="/halls.html">Halls</a>
+			</div>
+		</footer>
+	</div>
+
+	<!-- ─── Toast Container ─── -->
+	<div class="toast-container" id="toastContainer"></div>
+
+	<script>
+		(function() {
+			const token = document.querySelector('meta[name="csrf-token"]');
+			if (!token || !window.fetch) return;
+			const csrf = token.getAttribute('content');
+			const originalFetch = window.fetch;
+			window.fetch = function(input, init) {
+				init = init || {};
+				const method = (init.method || 'GET').toUpperCase();
+				if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+					const headers = new Headers(init.headers || {});
+					if (!headers.has('X-CSRFToken')) {
+						headers.set('X-CSRFToken', csrf);
+					}
+					init.headers = headers;
+				}
+				return originalFetch(input, init);
+			};
+		})();
+	</script>
+	<script>
+	(function () {
+		'use strict';
+
+		/* ─── State ─── */
+		const params = new URLSearchParams(window.location.search);
+		const roomNo = parseInt(params.get('room_no')) || 0;
+
+		let selectedDate = new Date();
+		let durationMinutes = 60;
+		let activeSession = 'morning';
+		let hallInfo = null;
+		let slotsData = [];
+
+		// Multi-select: Map keyed by "date|start|end" → slot object
+		const selectedSlots = new Map();
+
+		/* ─── DOM Refs ─── */
+		const hallTitle = document.getElementById('hallTitle');
+		const hallMeta = document.getElementById('hallMeta');
+		const dateRibbon = document.getElementById('dateRibbon');
+		const durLabel = document.getElementById('durLabel');
+		const durMinus = document.getElementById('durMinus');
+		const durPlus = document.getElementById('durPlus');
+		const tabMorning = document.getElementById('tabMorning');
+		const tabEvening = document.getElementById('tabEvening');
+		const slotGrid = document.getElementById('slotGrid');
+		const slotDetailPanel = document.getElementById('slotDetailPanel');
+		const detailTitle = document.getElementById('detailTitle');
+		const detailTime = document.getElementById('detailTime');
+		const waitlistEntries = document.getElementById('waitlistEntries');
+		const bookingFormSection = document.getElementById('bookingFormSection');
+		const bookingForm = document.getElementById('bookingForm');
+		const formRoomNo = document.getElementById('formRoomNo');
+		const formStart = document.getElementById('formStart');
+		const formEnd = document.getElementById('formEnd');
+		const formTimeSlots = document.getElementById('formTimeSlots');
+		const btnCancel = document.getElementById('btnCancel');
+		const btnSubmit = document.getElementById('btnSubmit');
+		const toastContainer = document.getElementById('toastContainer');
+		const selectedSlotsTray = document.getElementById('selectedSlotsTray');
+		const trayCount = document.getElementById('trayCount');
+		const trayChips = document.getElementById('trayChips');
+		const btnClearAll = document.getElementById('btnClearAll');
+
+		/* ─── Utilities ─── */
+		function formatDate(d) {
+			const y = d.getFullYear();
+			const m = String(d.getMonth() + 1).padStart(2, '0');
+			const day = String(d.getDate()).padStart(2, '0');
+			return `${y}-${m}-${day}`;
+		}
+
+		function formatDateShort(dateStr) {
+			const d = new Date(dateStr + 'T00:00:00');
+			const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+			return `${d.getDate()} ${months[d.getMonth()]}`;
+		}
+
+		function slotKey(dateStr, slot) {
+			return `${dateStr}|${slot.start_datetime}|${slot.end_datetime}`;
+		}
+
+		function durationLabel(mins) {
+			if (mins < 60) return `${mins} min`;
+			const h = Math.floor(mins / 60);
+			const m = mins % 60;
+			return m ? `${h} hr ${m}m` : `${h} hr`;
+		}
+
+		function showToast(message, type = 'info') {
+			const t = document.createElement('div');
+			t.className = `toast ${type}`;
+			t.textContent = message;
+			toastContainer.appendChild(t);
+			setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity 0.3s'; }, 3500);
+			setTimeout(() => t.remove(), 3900);
+		}
+
+		/* ─── Hall Info ─── */
+		async function loadHallInfo() {
+			if (!roomNo) {
+				hallTitle.textContent = 'No hall selected';
+				hallMeta.innerHTML = '<span class="meta-badge">Please go to Halls page to select one</span>';
+				return;
+			}
+
+			formRoomNo.value = roomNo;
+
+			try {
+				const res = await fetch('/api/halls', { credentials: 'same-origin' });
+				if (!res.ok) throw new Error('Failed to load halls');
+				const halls = await res.json();
+				hallInfo = halls.find(h => h.room_no == roomNo) || null;
+
+				if (hallInfo) {
+					hallTitle.textContent = hallInfo.hall_name || `Hall ${roomNo}`;
+					hallMeta.innerHTML = `
+						<span class="meta-badge">🏠 Room ${roomNo}</span>
+						<span class="meta-badge">👥 Capacity: ${hallInfo.capacity || '—'}</span>
+						${hallInfo.min_capacity ? `<span class="meta-badge">Min: ${hallInfo.min_capacity}</span>` : ''}
+					`;
+				} else {
+					hallTitle.textContent = `Hall ${roomNo}`;
+					hallMeta.innerHTML = `<span class="meta-badge">🏠 Room ${roomNo}</span>`;
+				}
+			} catch {
+				hallTitle.textContent = `Hall ${roomNo}`;
+				hallMeta.innerHTML = `<span class="meta-badge">🏠 Room ${roomNo}</span>`;
+			}
+		}
+
+		/* ─── Date Ribbon ─── */
+		function buildDateRibbon() {
+			dateRibbon.innerHTML = '';
+			const today = new Date();
+			today.setHours(0, 0, 0, 0);
+			const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+			const months = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+			let lastMonth = -1;
+
+			for (let i = 0; i < 14; i++) {
+				const d = new Date(today);
+				d.setDate(d.getDate() + i);
+
+				// Month divider
+				if (d.getMonth() !== lastMonth && i > 0) {
+					const divider = document.createElement('div');
+					divider.className = 'month-divider';
+					divider.textContent = months[d.getMonth()];
+					dateRibbon.appendChild(divider);
+				}
+				lastMonth = d.getMonth();
+
+				// Check if any selected slots fall on this date
+				const dateStr = formatDate(d);
+				let hasSelectedSlots = false;
+				for (const key of selectedSlots.keys()) {
+					if (key.startsWith(dateStr + '|')) { hasSelectedSlots = true; break; }
+				}
+
+				const chip = document.createElement('div');
+				chip.className = 'date-chip';
+				if (formatDate(d) === formatDate(selectedDate)) {
+					chip.classList.add('selected');
+				}
+				if (hasSelectedSlots) {
+					chip.classList.add('has-picks');
+				}
+				chip.innerHTML = `
+					<span class="day-name">${days[d.getDay()]}</span>
+					<span class="day-num">${String(d.getDate()).padStart(2, '0')}</span>
+					${hasSelectedSlots ? '<span class="pick-dot"></span>' : ''}
+				`;
+				chip.setAttribute('role', 'button');
+				chip.setAttribute('aria-label', d.toDateString());
+				chip.addEventListener('click', () => {
+					selectedDate = new Date(d);
+					buildDateRibbon();
+					loadSlots();
+				});
+				dateRibbon.appendChild(chip);
+			}
+		}
+
+		/* ─── Duration Controls ─── */
+		function updateDurationUI() {
+			durLabel.textContent = durationLabel(durationMinutes);
+			durMinus.disabled = durationMinutes <= 30;
+			durPlus.disabled = durationMinutes >= 240;
+		}
+
+		durMinus.addEventListener('click', () => {
+			if (durationMinutes > 30) {
+				durationMinutes -= 30;
+				updateDurationUI();
+				loadSlots();
+			}
+		});
+
+		durPlus.addEventListener('click', () => {
+			if (durationMinutes < 240) {
+				durationMinutes += 30;
+				updateDurationUI();
+				loadSlots();
+			}
+		});
+
+		/* ─── Session Tabs ─── */
+		function setSession(sess) {
+			activeSession = sess;
+			tabMorning.classList.toggle('active', sess === 'morning');
+			tabEvening.classList.toggle('active', sess === 'evening');
+			loadSlots();
+		}
+
+		tabMorning.addEventListener('click', () => setSession('morning'));
+		tabEvening.addEventListener('click', () => setSession('evening'));
+
+		/* ─── Load Slots ─── */
+		async function loadSlots() {
+			if (!roomNo) {
+				slotGrid.innerHTML = '<div class="slot-empty-state"><div class="empty-icon">🏠</div>Select a hall from the Halls page first.</div>';
+				return;
+			}
+
+			// Show skeleton
+			slotGrid.innerHTML = '';
+			for (let i = 0; i < 6; i++) {
+				const sk = document.createElement('div');
+				sk.className = 'skeleton skeleton-slot';
+				slotGrid.appendChild(sk);
+			}
+			hideDetailPanel();
+
+			const dateStr = formatDate(selectedDate);
+			try {
+				const url = `/api/slots/overview?room_no=${roomNo}&date=${dateStr}&session=${activeSession}&duration_minutes=${durationMinutes}`;
+				const res = await fetch(url, { credentials: 'same-origin' });
+				if (!res.ok) throw new Error('Slot fetch failed');
+				const data = await res.json();
+				slotsData = data.slots || [];
+				renderSlots();
+			} catch (err) {
+				slotGrid.innerHTML = '<div class="slot-empty-state"><div class="empty-icon">⚠️</div>Unable to load slots. Try again.</div>';
+				console.error(err);
+			}
+		}
+
+		/* ─── Render Slots ─── */
+		function renderSlots() {
+			slotGrid.innerHTML = '';
+			const dateStr = formatDate(selectedDate);
+
+			if (!slotsData.length) {
+				slotGrid.innerHTML = '<div class="slot-empty-state"><div class="empty-icon">📅</div>No slots available for this date & session.</div>';
+				return;
+			}
+
+			slotsData.forEach((slot, idx) => {
+				const key = slotKey(dateStr, slot);
+				const isSelected = selectedSlots.has(key);
+
+				const card = document.createElement('div');
+				card.className = `slot-card status-${slot.status}`;
+				if (slot.blocked) card.classList.add('blocked');
+				if (isSelected) card.classList.add('in-cart');
+
+				const waitText = slot.waiting_count > 0
+					? `Waiting list: ${slot.waiting_count}`
+					: (slot.blocked ? 'No slots available' : 'No waiting');
+
+				card.innerHTML = `
+					<label class="slot-checkbox-wrap" onclick="event.stopPropagation()">
+						<input type="checkbox" class="slot-checkbox" data-idx="${idx}"
+							${isSelected ? 'checked' : ''} ${slot.blocked ? 'disabled' : ''}>
+						<span class="slot-checkmark"></span>
+					</label>
+					<div class="time-range">${slot.time_label}</div>
+					<div class="waiting-info">${waitText}</div>
+					<span class="status-badge">${slot.status_label}</span>
+				`;
+
+				// Checkbox change handler
+				const checkbox = card.querySelector('.slot-checkbox');
+				checkbox.addEventListener('change', (e) => {
+					e.stopPropagation();
+					if (e.target.checked) {
+						selectedSlots.set(key, {
+							date: dateStr,
+							start_datetime: slot.start_datetime,
+							end_datetime: slot.end_datetime,
+							time_label: slot.time_label,
+						});
+					} else {
+						selectedSlots.delete(key);
+					}
+					renderSlots();
+					updateTray();
+					buildDateRibbon();
+				});
+
+				// Clicking the card also toggles the checkbox
+				if (!slot.blocked) {
+					card.addEventListener('click', (e) => {
+						if (e.target.closest('.slot-checkbox-wrap')) return;
+						checkbox.checked = !checkbox.checked;
+						checkbox.dispatchEvent(new Event('change'));
+					});
+				}
+
+				// Right-click or long press shows detail
+				card.addEventListener('contextmenu', (e) => {
+					e.preventDefault();
+					showDetailPanel(slot);
+				});
+
+				slotGrid.appendChild(card);
+			});
+		}
+
+		/* ─── Selected Slots Tray ─── */
+		function updateTray() {
+			const count = selectedSlots.size;
+			trayCount.textContent = count;
+
+			if (count === 0) {
+				selectedSlotsTray.classList.remove('visible');
+				bookingFormSection.classList.remove('visible');
+				return;
+			}
+
+			selectedSlotsTray.classList.add('visible');
+			bookingFormSection.classList.add('visible');
+
+			// Build tray chips
+			trayChips.innerHTML = '';
+			const sorted = [...selectedSlots.entries()].sort((a, b) => {
+				return a[1].start_datetime.localeCompare(b[1].start_datetime);
+			});
+
+			sorted.forEach(([key, info]) => {
+				const chip = document.createElement('div');
+				chip.className = 'tray-chip';
+				chip.innerHTML = `
+					<span class="tray-chip-date">${formatDateShort(info.date)}</span>
+					<span class="tray-chip-time">${info.time_label}</span>
+					<button type="button" class="tray-chip-remove" title="Remove">&times;</button>
+				`;
+				chip.querySelector('.tray-chip-remove').addEventListener('click', () => {
+					selectedSlots.delete(key);
+					renderSlots();
+					updateTray();
+					buildDateRibbon();
+				});
+				trayChips.appendChild(chip);
+			});
+
+			// Update hidden form fields with first slot and full time_slots JSON
+			const first = sorted[0][1];
+			formStart.value = first.start_datetime;
+			formEnd.value = first.end_datetime;
+			formTimeSlots.value = JSON.stringify(sorted.map(([_, s]) => ({
+				date: s.date,
+				start_datetime: s.start_datetime,
+				end_datetime: s.end_datetime,
+				time_label: s.time_label,
+			})));
+		}
+
+		btnClearAll.addEventListener('click', () => {
+			selectedSlots.clear();
+			renderSlots();
+			updateTray();
+			buildDateRibbon();
+		});
+
+		/* ─── Detail Panel (right-click) ─── */
+		function showDetailPanel(slot) {
+			detailTitle.textContent = 'Slot Details';
+			detailTime.textContent = `📅 ${formatDate(selectedDate)}  •  ⏰ ${slot.time_label}`;
+
+			waitlistEntries.innerHTML = '';
+			const breakdown = slot.approval_breakdown || {};
+			const entries = [];
+
+			for (let i = 0; i < (breakdown.secretary_approved || 0); i++) {
+				entries.push({ stage: 'approved', label: 'Confirmed', status: 'Secretary Approved' });
+			}
+			for (let i = 0; i < (breakdown.principal_approved || 0); i++) {
+				entries.push({ stage: 'principal', label: 'In Progress', status: 'Principal Approved' });
+			}
+			for (let i = 0; i < (breakdown.hod_approved || 0); i++) {
+				entries.push({ stage: 'hod', label: 'In Progress', status: 'HOD Approved' });
+			}
+			for (let i = 0; i < (breakdown.pending_hod || 0); i++) {
+				entries.push({ stage: 'pending', label: 'Pending', status: 'Pending HOD' });
+			}
+			for (let i = 0; i < (slot.waiting_count || 0); i++) {
+				entries.push({ stage: 'waitlisted', label: 'Waitlisted', status: 'In Queue' });
+			}
+
+			if (entries.length === 0) {
+				waitlistEntries.innerHTML = '<div class="waitlist-no-entries">✨ No existing bookings — this slot is completely open!</div>';
+			} else {
+				entries.forEach((entry, i) => {
+					const el = document.createElement('div');
+					el.className = `waitlist-entry stage-${entry.stage}`;
+					el.innerHTML = `
+						<span class="pos-badge">${i + 1}</span>
+						<span class="entry-info">Booking Request #${i + 1}</span>
+						<span class="entry-status">${entry.status}</span>
+					`;
+					waitlistEntries.appendChild(el);
+				});
+			}
+
+			slotDetailPanel.classList.add('visible');
+		}
+
+		function hideDetailPanel() {
+			slotDetailPanel.classList.remove('visible');
+		}
+
+		/* ─── Booking Form ─── */
+		btnCancel.addEventListener('click', () => {
+			selectedSlots.clear();
+			hideDetailPanel();
+			renderSlots();
+			updateTray();
+			buildDateRibbon();
+		});
+
+		bookingForm.addEventListener('submit', async function (e) {
+			e.preventDefault();
+
+			if (selectedSlots.size === 0) {
+				showToast('Please select at least one time slot', 'error');
+				return;
+			}
+
+			btnSubmit.disabled = true;
+			btnSubmit.textContent = 'Submitting…';
+
+			try {
+				const formData = new FormData(bookingForm);
+				formData.set('duration_minutes', String(durationMinutes));
+
+				const res = await fetch('/bookings/create', {
+					method: 'POST',
+					credentials: 'same-origin',
+					body: formData,
+				});
+
+				const result = await res.json();
+
+				if (res.ok) {
+					const status = result.request_status || 'submitted';
+					const bookingId = result.booking_id || '';
+					const slotCount = selectedSlots.size;
+					if (status === 'Waitlisted') {
+						showToast(`Booking #${bookingId} is waitlisted (position: ${result.queue_position}). ${result.suggested_start ? 'An alternative slot was suggested.' : ''}`, 'info');
+					} else {
+						showToast(`Booking #${bookingId} submitted with ${slotCount} slot${slotCount > 1 ? 's' : ''} for approval! Status: ${status.replace(/_/g, ' ')}`, 'success');
+					}
+					bookingForm.reset();
+					formRoomNo.value = roomNo;
+					selectedSlots.clear();
+					hideDetailPanel();
+					updateTray();
+					buildDateRibbon();
+					loadSlots();
+				} else {
+					showToast(result.error || 'Booking failed. Try again.', 'error');
+				}
+			} catch (err) {
+				showToast('Network error. Please try again.', 'error');
+				console.error(err);
+			} finally {
+				btnSubmit.disabled = false;
+				btnSubmit.textContent = 'Confirm Booking';
+			}
+		});
+
+		/* ─── Init ─── */
+		loadHallInfo();
+		buildDateRibbon();
+		updateDurationUI();
+		loadSlots();
+	})();
+	</script>
+</body>
+</html>
