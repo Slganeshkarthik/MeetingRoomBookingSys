@@ -13,6 +13,7 @@ import uuid # unquie id
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import secrets
+import re
 
 try:
     flask_mail_module = importlib.import_module('flask_mail')
@@ -3774,8 +3775,18 @@ def admin_create_approver():
         department = (payload.get('department') or '').strip() or 'Administration'
         password = (payload.get('password') or '').strip()
 
-        if role not in APPROVER_ROLES:
-            return jsonify({'ok': False, 'error': 'role must be one of hod, principal, secretary'}), 400
+        # Role must not be empty
+        if not role:
+            return jsonify({'ok': False, 'error': 'role is required'}), 400
+
+        # Role must only contain safe characters
+        if not re.match(r'^[a-z0-9_\-]+$', role):
+            return jsonify({'ok': False, 'error': 'role may only contain letters, numbers, hyphens, and underscores'}), 400
+
+        # Disallow reserved system roles that are not approver roles
+        _reserved_non_approver = {'admin', 'student', 'staff', 'faculty'}
+        if role in _reserved_non_approver:
+            return jsonify({'ok': False, 'error': f'role "{role}" is reserved and cannot be used for approver accounts'}), 400
 
         if not username or not name or not email or not password:
             return jsonify({'ok': False, 'error': 'username, name, email and password are required'}), 400
