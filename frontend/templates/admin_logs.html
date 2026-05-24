@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Admin Logs - {{ config.app_title if config else 'Meeting Hall System' }}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/dashboard.css">
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #182230;
+      --muted: #667085;
+      --line: #d8e0ec;
+      --nav: #172033;
+      --blue: #2563eb;
+      --green: #15803d;
+      --amber: #b45309;
+      --red: #b91c1c;
+      --violet: #7c3aed;
+      --shadow: 0 12px 30px rgba(15, 23, 42, 0.07);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+    }
+
+    .layout {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+    }
+
+    .sidebar {
+      background: #1f2937;
+      color: white;
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      -webkit-overflow-scrolling: touch;
+      font-size: 14px;
+    }
+
+    .sidebar-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 30px;
+      padding-bottom: 20px;
+      border-bottom: 1px solid #374151;
+    }
+
+    .sidebar-header h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+      color: #fff;
+    }
+
+    .sidebar-menu {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .sidebar-menu a {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      color: #e5e7eb;
+      transition: all 0.2s ease;
+      font-size: 14px;
+    }
+
+    .sidebar-menu a:hover {
+      background: #374151;
+      color: #fff;
+    }
+
+    .sidebar-menu a.active {
+      background: #3b82f6;
+      color: white;
+      font-weight: 800;
+    }
+
+    .sidebar-menu-section {
+      margin-top: 30px;
+    }
+
+    .sidebar-menu-title {
+      font-size: 11px;
+      font-weight: 800;
+      color: #9ca3af;
+      text-transform: uppercase;
+      padding: 12px 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .main {
+      min-width: 0;
+      padding: 24px;
+    }
+
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 18px;
+      margin-bottom: 16px;
+    }
+
+    .heading h1 {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .heading p {
+      margin: 8px 0 0;
+      max-width: 760px;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .top-actions,
+    .tab-row,
+    .pager {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 9px 13px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 800;
+      background: #fff;
+      color: var(--nav);
+    }
+
+    .btn-dark {
+      background: var(--nav);
+      color: #fff;
+      box-shadow: 0 10px 24px rgba(23, 32, 51, 0.16);
+    }
+
+    .btn-light {
+      border-color: var(--line);
+      color: var(--text);
+    }
+
+    .btn:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .tabs {
+      margin: 18px 0;
+      padding: 6px;
+      display: inline-flex;
+      background: #e8eef7;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      gap: 4px;
+    }
+
+    .tab {
+      min-height: 36px;
+      border: 0;
+      border-radius: 6px;
+      padding: 8px 14px;
+      background: transparent;
+      color: #475467;
+      font-weight: 800;
+    }
+
+    .tab.active {
+      background: #fff;
+      color: var(--blue);
+      box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+
+    .summary-card,
+    .log-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .summary-card {
+      padding: 16px;
+      min-height: 96px;
+    }
+
+    .summary-label {
+      font-size: 11px;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 800;
+    }
+
+    .summary-value {
+      margin-top: 10px;
+      font-size: 26px;
+      font-weight: 900;
+      color: var(--nav);
+    }
+
+    .summary-note {
+      margin-top: 4px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .log-card {
+      overflow: hidden;
+    }
+
+    .filter-panel {
+      padding: 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel-soft);
+    }
+
+    .filter-grid {
+      display: grid;
+      grid-template-columns: minmax(180px, 1.4fr) minmax(130px, 0.8fr) minmax(130px, 0.8fr) auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    .field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 800;
+    }
+
+    .field input,
+    .field select {
+      width: 100%;
+      min-height: 40px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: #fff;
+      color: var(--text);
+      outline: none;
+    }
+
+    .table-wrap {
+      overflow-x: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      min-width: 980px;
+    }
+
+    th,
+    td {
+      padding: 12px 14px;
+      border-bottom: 1px solid #edf1f7;
+      text-align: left;
+      vertical-align: top;
+      font-size: 13px;
+    }
+
+    th {
+      background: #f8fafc;
+      color: #475467;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-weight: 900;
+    }
+
+    .muted {
+      color: var(--muted);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 3px 9px;
+      font-size: 11px;
+      font-weight: 900;
+      background: #e0ecff;
+      color: #1d4ed8;
+      white-space: nowrap;
+    }
+
+    .pill.sent,
+    .pill.active {
+      background: #dcfce7;
+      color: var(--green);
+    }
+
+    .pill.suppressed,
+    .pill.expired {
+      background: #fef3c7;
+      color: var(--amber);
+    }
+
+    .pill.clicked,
+    .pill.consumed {
+      background: #ede9fe;
+      color: var(--violet);
+    }
+
+    .pill.failed,
+    .pill.locked {
+      background: #fee2e2;
+      color: var(--red);
+    }
+
+    .table-footer {
+      padding: 14px 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+
+    .empty-state {
+      padding: 28px;
+      text-align: center;
+      color: var(--muted);
+      font-weight: 700;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      width: 38px;
+      height: 38px;
+      border-radius: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--nav);
+      font-size: 20px;
+    }
+
+    .sidebar-overlay {
+      display: none;
+    }
+
+    body.sidebar-locked {
+      overflow: hidden;
+      touch-action: none;
+    }
+
+    @media (max-width: 960px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: fixed;
+        inset: 0 auto 0 0;
+        width: min(82vw, 290px);
+        transform: translateX(-100%);
+        transition: transform 0.2s ease;
+        z-index: 20;
+      }
+
+      .layout.sidebar-open .sidebar {
+        transform: translateX(0);
+      }
+
+      .sidebar-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(15, 23, 42, 0.45);
+        z-index: 15;
+      }
+
+      .layout.sidebar-open .sidebar-overlay {
+        display: block;
+      }
+
+      .sidebar-toggle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+
+      .summary-grid,
+      .filter-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .main {
+        padding: 14px;
+      }
+
+      .topbar,
+      .table-footer {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .summary-grid,
+      .filter-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .heading h1 {
+        font-size: 24px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <span style="font-size: 24px;">LOG</span>
+        <h2>Admin Panel</h2>
+      </div>
+
+      <nav class="sidebar-menu">
+        <a href="/admin-dashboard.html">Dashboard</a>
+        <a href="/admin-analytics.html">Analytics</a>
+        <a href="/admin-config.html">Configuration</a>
+        <a href="/admin-mail-health.html">Mail Health</a>
+        <a href="/admin-logs.html" class="active">Logs</a>
+      </nav>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">Management</div>
+        <nav class="sidebar-menu">
+          <a href="/admin-dashboard.html#approvals">Approver Accounts</a>
+          <a href="/admin-dashboard.html#users">Users</a>
+          <a href="/admin-config.html#roomConf">Meeting Rooms</a>
+          <a href="/admin-analytics.html">Reports</a>
+        </nav>
+      </div>
+
+      <div class="sidebar-menu-section">
+        <div class="sidebar-menu-title">System</div>
+        <nav class="sidebar-menu">
+          <a href="/admin-mail-health.html">Mail Health</a>
+          <a href="/admin-logs.html" class="active">Audit Logs</a>
+          <a href="/logout" style="color: #ef4444;">Logout</a>
+        </nav>
+      </div>
+    </aside>
+
+    <div class="sidebar-overlay" data-sidebar-overlay></div>
+
+    <main class="main">
+      <div class="topbar">
+        <div class="heading">
+          <h1>System Logs</h1>
+          <p>Review outbound email delivery records and login OTP challenge history. Tokens and OTP hashes are intentionally hidden.</p>
+        </div>
+        <div class="top-actions">
+          <button class="sidebar-toggle" type="button" aria-label="Open menu" aria-expanded="false" data-sidebar-toggle>...</button>
+          <button class="btn btn-light" type="button" id="resetBtn">Reset</button>
+          <button class="btn btn-dark" type="button" id="refreshBtn">Refresh</button>
+        </div>
+      </div>
+
+      <div class="tabs" role="tablist" aria-label="Log type">
+        <button class="tab active" type="button" data-log-tab="email">Email Logs</button>
+        <button class="tab" type="button" data-log-tab="otp">OTP Logs</button>
+      </div>
+
+      <section class="summary-grid" aria-label="Log summary">
+        <div class="summary-card">
+          <div class="summary-label">Current View</div>
+          <div class="summary-value" id="viewSummary">Email</div>
+          <div class="summary-note">Selected log table</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Total Rows</div>
+          <div class="summary-value" id="totalSummary">0</div>
+          <div class="summary-note">Matching filters</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Showing</div>
+          <div class="summary-value" id="showingSummary">0</div>
+          <div class="summary-note">Rows on this page</div>
+        </div>
+        <div class="summary-card">
+          <div class="summary-label">Page</div>
+          <div class="summary-value" id="pageSummary">1</div>
+          <div class="summary-note">50 rows per page</div>
+        </div>
+      </section>
+
+      <section class="log-card">
+        <div class="filter-panel">
+          <div class="filter-grid">
+            <div class="field">
+              <label for="searchInput">Search</label>
+              <input id="searchInput" type="search" placeholder="Recipient, username, booking ID, status">
+            </div>
+            <div class="field" id="emailTypeField">
+              <label for="emailTypeFilter">Email Type</label>
+              <select id="emailTypeFilter">
+                <option value="">All types</option>
+                <option value="approval_request">Approval request</option>
+                <option value="status_update">Status update</option>
+                <option value="booking_submitted">Booking submitted</option>
+                <option value="alternative_slot">Alternative slot</option>
+                <option value="coordinator_setup">Coordinator setup</option>
+                <option value="otp">OTP</option>
+              </select>
+            </div>
+            <div class="field" id="emailStatusField">
+              <label for="emailStatusFilter">Email Status</label>
+              <select id="emailStatusFilter">
+                <option value="">All statuses</option>
+                <option value="sent">Sent</option>
+                <option value="suppressed">Suppressed</option>
+                <option value="clicked">Clicked</option>
+                <option value="failed">Failed</option>
+              </select>
+            </div>
+            <div class="field" id="otpStatusField" style="display:none;">
+              <label for="otpStatusFilter">OTP Status</label>
+              <select id="otpStatusFilter">
+                <option value="">All statuses</option>
+                <option value="active">Active</option>
+                <option value="consumed">Consumed</option>
+                <option value="expired">Expired</option>
+                <option value="locked">Locked</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>&nbsp;</label>
+              <button class="btn btn-dark" type="button" id="applyBtn">Apply</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table id="emailTable">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Booking</th>
+                <th>Recipient</th>
+                <th>Role</th>
+                <th>Type</th>
+                <th>Status</th>
+                <th>Sent</th>
+                <th>Clicked</th>
+                <th>Token</th>
+              </tr>
+            </thead>
+            <tbody id="emailRows"></tbody>
+          </table>
+
+          <table id="otpTable" style="display:none;">
+            <thead>
+              <tr>
+                <th>Challenge</th>
+                <th>User</th>
+                <th>Role</th>
+                <th>Email</th>
+                <th>Status</th>
+                <th>Attempts</th>
+                <th>Created</th>
+                <th>Expires</th>
+                <th>Consumed</th>
+              </tr>
+            </thead>
+            <tbody id="otpRows"></tbody>
+          </table>
+        </div>
+
+        <div id="emptyState" class="empty-state" style="display:none;">No logs found for the current filters.</div>
+
+        <div class="table-footer">
+          <div class="muted" id="resultLine">Loading logs...</div>
+          <div class="pager">
+            <button class="btn btn-light" type="button" id="prevBtn">Previous</button>
+            <button class="btn btn-light" type="button" id="nextBtn">Next</button>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script>
+    (function() {
+      const token = document.querySelector('meta[name="csrf-token"]');
+      if (!token || !window.fetch) return;
+      const csrf = token.getAttribute('content');
+      const originalFetch = window.fetch;
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+          const headers = new Headers(init.headers || {});
+          if (!headers.has('X-CSRFToken')) {
+            headers.set('X-CSRFToken', csrf);
+          }
+          init.headers = headers;
+        }
+        return originalFetch(input, init);
+      };
+    })();
+  </script>
+
+  <script>
+    const state = {
+      tab: 'email',
+      limit: 50,
+      offset: 0,
+      total: 0
+    };
+
+    const refs = {
+      search: document.getElementById('searchInput'),
+      emailType: document.getElementById('emailTypeFilter'),
+      emailStatus: document.getElementById('emailStatusFilter'),
+      otpStatus: document.getElementById('otpStatusFilter'),
+      emailRows: document.getElementById('emailRows'),
+      otpRows: document.getElementById('otpRows'),
+      emailTable: document.getElementById('emailTable'),
+      otpTable: document.getElementById('otpTable'),
+      empty: document.getElementById('emptyState'),
+      resultLine: document.getElementById('resultLine'),
+      prev: document.getElementById('prevBtn'),
+      next: document.getElementById('nextBtn'),
+      viewSummary: document.getElementById('viewSummary'),
+      totalSummary: document.getElementById('totalSummary'),
+      showingSummary: document.getElementById('showingSummary'),
+      pageSummary: document.getElementById('pageSummary'),
+      emailTypeField: document.getElementById('emailTypeField'),
+      emailStatusField: document.getElementById('emailStatusField'),
+      otpStatusField: document.getElementById('otpStatusField')
+    };
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function shortId(value) {
+      const text = String(value || '');
+      if (!text) return '-';
+      return text.length > 14 ? text.slice(0, 8) + '...' + text.slice(-4) : text;
+    }
+
+    function statusPill(value) {
+      const text = String(value || '-');
+      return `<span class="pill ${escapeHtml(text.toLowerCase())}">${escapeHtml(text)}</span>`;
+    }
+
+    function fmt(value) {
+      return value ? escapeHtml(value) : '<span class="muted">-</span>';
+    }
+
+    function buildParams() {
+      const params = new URLSearchParams();
+      params.set('limit', state.limit);
+      params.set('offset', state.offset);
+      const q = refs.search.value.trim();
+      if (q) params.set('q', q);
+      if (state.tab === 'email') {
+        if (refs.emailType.value) params.set('email_type', refs.emailType.value);
+        if (refs.emailStatus.value) params.set('status', refs.emailStatus.value);
+      } else if (refs.otpStatus.value) {
+        params.set('status', refs.otpStatus.value);
+      }
+      return params;
+    }
+
+    async function loadLogs() {
+      refs.resultLine.textContent = 'Loading logs...';
+      refs.prev.disabled = true;
+      refs.next.disabled = true;
+
+      const endpoint = state.tab === 'email' ? '/api/admin/logs/email' : '/api/admin/logs/otp';
+      const res = await fetch(`${endpoint}?${buildParams().toString()}`, {
+        headers: { Accept: 'application/json' }
+      });
+      const data = await res.json();
+      if (!res.ok || !data.ok) {
+        refs.resultLine.textContent = data.error || 'Unable to load logs';
+        refs.emailRows.innerHTML = '';
+        refs.otpRows.innerHTML = '';
+        refs.empty.style.display = 'block';
+        return;
+      }
+
+      state.total = Number(data.total || 0);
+      const rows = Array.isArray(data.logs) ? data.logs : [];
+      if (state.tab === 'email') {
+        renderEmailRows(rows);
+      } else {
+        renderOtpRows(rows);
+      }
+      updateSummary(rows.length);
+    }
+
+    function renderEmailRows(rows) {
+      refs.emailRows.innerHTML = rows.map(row => `
+        <tr>
+          <td class="mono">${escapeHtml(row.email_log_id)}</td>
+          <td>
+            <div>${escapeHtml(row.booking_id || '-')}</div>
+            <div class="muted mono">request ${escapeHtml(row.request_id || '-')}</div>
+          </td>
+          <td>${fmt(row.recipient_email)}</td>
+          <td>${fmt(row.recipient_role)}</td>
+          <td>${statusPill(row.email_type)}</td>
+          <td>${statusPill(row.status)}</td>
+          <td>${fmt(row.sent_at)}</td>
+          <td>${fmt(row.clicked_at)}</td>
+          <td>${row.has_token ? '<span class="pill">stored</span>' : '<span class="muted">-</span>'}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderOtpRows(rows) {
+      refs.otpRows.innerHTML = rows.map(row => `
+        <tr>
+          <td class="mono" title="${escapeHtml(row.challenge_id || '')}">${escapeHtml(shortId(row.challenge_id))}</td>
+          <td>${fmt(row.username)}</td>
+          <td>${fmt(row.role)}</td>
+          <td>${fmt(row.email)}</td>
+          <td>${statusPill(row.challenge_status)}</td>
+          <td>${escapeHtml(row.failed_attempts || 0)} / ${escapeHtml(row.max_attempts || 0)}</td>
+          <td>${fmt(row.created_at)}</td>
+          <td>${fmt(row.expires_at)}</td>
+          <td>${fmt(row.consumed_at)}</td>
+        </tr>
+      `).join('');
+    }
+
+    function updateSummary(showing) {
+      const page = Math.floor(state.offset / state.limit) + 1;
+      refs.viewSummary.textContent = state.tab === 'email' ? 'Email' : 'OTP';
+      refs.totalSummary.textContent = state.total;
+      refs.showingSummary.textContent = showing;
+      refs.pageSummary.textContent = page;
+      refs.empty.style.display = showing ? 'none' : 'block';
+      refs.resultLine.textContent = state.total
+        ? `Showing ${state.offset + 1}-${state.offset + showing} of ${state.total}`
+        : 'No logs found';
+      refs.prev.disabled = state.offset <= 0;
+      refs.next.disabled = state.offset + state.limit >= state.total;
+    }
+
+    function setTab(tab) {
+      state.tab = tab;
+      state.offset = 0;
+      document.querySelectorAll('[data-log-tab]').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.logTab === tab);
+      });
+      refs.emailTable.style.display = tab === 'email' ? '' : 'none';
+      refs.otpTable.style.display = tab === 'otp' ? '' : 'none';
+      refs.emailTypeField.style.display = tab === 'email' ? '' : 'none';
+      refs.emailStatusField.style.display = tab === 'email' ? '' : 'none';
+      refs.otpStatusField.style.display = tab === 'otp' ? '' : 'none';
+      loadLogs();
+    }
+
+    document.querySelectorAll('[data-log-tab]').forEach(btn => {
+      btn.addEventListener('click', () => setTab(btn.dataset.logTab));
+    });
+
+    document.getElementById('applyBtn').addEventListener('click', () => {
+      state.offset = 0;
+      loadLogs();
+    });
+
+    document.getElementById('refreshBtn').addEventListener('click', loadLogs);
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      refs.search.value = '';
+      refs.emailType.value = '';
+      refs.emailStatus.value = '';
+      refs.otpStatus.value = '';
+      state.offset = 0;
+      loadLogs();
+    });
+
+    refs.search.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        state.offset = 0;
+        loadLogs();
+      }
+    });
+
+    refs.prev.addEventListener('click', () => {
+      state.offset = Math.max(0, state.offset - state.limit);
+      loadLogs();
+    });
+
+    refs.next.addEventListener('click', () => {
+      if (state.offset + state.limit < state.total) {
+        state.offset += state.limit;
+        loadLogs();
+      }
+    });
+
+    (function setupSidebarToggle() {
+      const layout = document.querySelector('.layout');
+      const toggleButton = document.querySelector('[data-sidebar-toggle]');
+      const overlay = document.querySelector('[data-sidebar-overlay]');
+      function setSidebarOpen(isOpen) {
+        if (!layout || !toggleButton) return;
+        layout.classList.toggle('sidebar-open', isOpen);
+        toggleButton.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        document.body.classList.toggle('sidebar-locked', isOpen);
+      }
+      if (toggleButton) {
+        toggleButton.addEventListener('click', () => setSidebarOpen(!layout.classList.contains('sidebar-open')));
+      }
+      if (overlay) {
+        overlay.addEventListener('click', () => setSidebarOpen(false));
+      }
+      document.querySelectorAll('.sidebar a').forEach(link => {
+        link.addEventListener('click', () => {
+          if (window.innerWidth <= 960) setSidebarOpen(false);
+        });
+      });
+    })();
+
+    loadLogs();
+  </script>
+</body>
+</html>

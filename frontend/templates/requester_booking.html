@@ -240,6 +240,20 @@
 			return m ? `${h} hr ${m}m` : `${h} hr`;
 		}
 
+		function parseSlotDateTime(value) {
+			if (!value) return null;
+			try {
+				let v = String(value).trim();
+				v = v.replace(/\s*(GMT|UTC|Z)$/i, '');
+				const simpleDatetime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+				if (simpleDatetime.test(v)) v = v.replace(' ', 'T');
+				const d = new Date(v);
+				return Number.isNaN(d.getTime()) ? null : d;
+			} catch (e) {
+				return null;
+			}
+		}
+
 		function showToast(message, type = 'info') {
 			const t = document.createElement('div');
 			t.className = `toast ${type}`;
@@ -403,6 +417,7 @@
 		function renderSlots() {
 			slotGrid.innerHTML = '';
 			const dateStr = formatDate(selectedDate);
+			const now = new Date();
 
 			if (!slotsData.length) {
 				slotGrid.innerHTML = '<div class="slot-empty-state"><div class="empty-icon">📅</div>No slots available for this date & session.</div>';
@@ -410,6 +425,10 @@
 			}
 
 			slotsData.forEach((slot, idx) => {
+				const slotStart = parseSlotDateTime(slot.start_datetime);
+				if (formatDate(selectedDate) === formatDate(now) && slotStart && slotStart <= now) {
+					return;
+				}
 				const key = slotKey(dateStr, slot);
 				const isSelected = selectedSlots.has(key);
 
@@ -609,11 +628,13 @@
 				if (res.ok) {
 					const status = result.request_status || 'submitted';
 					const bookingId = result.booking_id || '';
-					const slotCount = selectedSlots.size;
+					const slotCount = result.booking_count || selectedSlots.size;
+					const bookingIds = Array.isArray(result.booking_ids) ? result.booking_ids.filter(Boolean) : (bookingId ? [bookingId] : []);
+					const bookingLabel = bookingIds.length > 1 ? bookingIds.join(', ') : bookingId;
 					if (status === 'Waitlisted') {
-						showToast(`Booking #${bookingId} is waitlisted (position: ${result.queue_position}). ${result.suggested_start ? 'An alternative slot was suggested.' : ''}`, 'info');
+						showToast(`Booking #${bookingLabel} is waitlisted (position: ${result.queue_position}). ${result.suggested_start ? 'An alternative slot was suggested.' : ''}`, 'info');
 					} else {
-						showToast(`Booking #${bookingId} submitted with ${slotCount} slot${slotCount > 1 ? 's' : ''} for approval! Status: ${status.replace(/_/g, ' ')}`, 'success');
+						showToast(`Booking #${bookingLabel} submitted with ${slotCount} slot${slotCount > 1 ? 's' : ''} for approval! Status: ${status.replace(/_/g, ' ')}`, 'success');
 					}
 					bookingForm.reset();
 					formRoomNo.value = roomNo;

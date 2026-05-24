@@ -950,6 +950,185 @@
         font-size: 12px;
       }
     }
+
+    /* ── Per-slot approval styles ── */
+    .slot-list-container {
+      margin: -2px 0 16px;
+      border: 1px solid #e2eaf4;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #fbfcff;
+    }
+
+    .slot-list-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      width: 100%;
+      padding: 12px 16px;
+      border: none;
+      background: linear-gradient(135deg, #eef3ff 0%, #f5f8ff 100%);
+      cursor: pointer;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--navy);
+      transition: background 0.18s ease;
+    }
+
+    .slot-list-toggle:hover {
+      background: linear-gradient(135deg, #e4ebff 0%, #eef3ff 100%);
+    }
+
+    .slot-list-toggle .toggle-icon {
+      transition: transform 0.25s ease;
+      font-size: 11px;
+      opacity: 0.6;
+    }
+
+    .slot-list-toggle.collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+
+    .slot-list {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .slot-list.collapsed {
+      display: none;
+    }
+
+    .slot-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 11px 16px;
+      border-top: 1px solid #edf2f7;
+      transition: background 0.15s ease;
+    }
+
+    .slot-row:hover {
+      background: rgba(29, 78, 216, 0.03);
+    }
+
+    .slot-row.slot-decided {
+      opacity: 0.6;
+      background: #fafbfd;
+    }
+
+    .slot-info {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex: 1;
+      min-width: 0;
+      flex-wrap: wrap;
+    }
+
+    .slot-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: var(--navy);
+      color: white;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .slot-decided .slot-num {
+      background: #94a3b8;
+    }
+
+    .slot-time {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+      white-space: nowrap;
+    }
+
+    .slot-actions {
+      display: flex;
+      gap: 6px;
+      flex-shrink: 0;
+    }
+
+    .btn-approve-sm,
+    .btn-reject-sm {
+      border: none;
+      border-radius: 10px;
+      padding: 6px 14px;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+    }
+
+    .btn-approve-sm:hover,
+    .btn-reject-sm:hover {
+      transform: translateY(-1px);
+    }
+
+    .btn-approve-sm {
+      background: var(--navy);
+      color: white;
+      box-shadow: 0 4px 14px rgba(15, 39, 72, 0.15);
+    }
+
+    .btn-reject-sm {
+      background: #fff4f4;
+      color: var(--danger);
+      border: 1px solid #f8caca;
+    }
+
+    .btn-approve-sm:disabled,
+    .btn-reject-sm:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .slot-decided-label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .batch-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      align-self: center;
+    }
+
+    @media (max-width: 780px) {
+      .slot-row {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+      }
+
+      .slot-actions {
+        width: 100%;
+      }
+
+      .btn-approve-sm,
+      .btn-reject-sm {
+        flex: 1;
+      }
+
+      .slot-time {
+        white-space: normal;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1158,6 +1337,20 @@
       }
     }
 
+    function safeDate(value) {
+      if (!value) return null;
+      try {
+        let v = String(value).trim();
+        v = v.replace(/\s*(GMT|UTC|Z)$/i, '');
+        const simpleDatetime = /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/;
+        if (simpleDatetime.test(v)) v = v.replace(' ', 'T');
+        const d = new Date(v);
+        return Number.isNaN(d.getTime()) ? null : d;
+      } catch (e) {
+        return null;
+      }
+    }
+
     function decisionClass(decision) {
       const normalized = String(decision || '').toLowerCase();
       if (normalized === 'approved') return 'approved';
@@ -1190,6 +1383,62 @@
 
     function requesterCommentFor(item) {
       return firstTextValue(item?.user_comment, item?.requester_comment);
+    }
+
+    function groupPendingRequests(items) {
+      const groups = new Map();
+      (Array.isArray(items) ? items : []).forEach(item => {
+        const key = item.request_group_id ? `group-${item.request_group_id}` : `single-${item.request_id}`;
+        if (!groups.has(key)) {
+          groups.set(key, { key, items: [] });
+        }
+        groups.get(key).items.push(item);
+      });
+
+      return Array.from(groups.values()).map(group => buildPendingGroup(group.key, group.items));
+    }
+
+    function buildPendingGroup(key, items) {
+      const sorted = [...items].sort((a, b) => {
+        const da = safeDate(a.requested_start);
+        const db = safeDate(b.requested_start);
+        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      });
+      const primary = sorted[0] || {};
+      const statusSet = new Set(sorted.map(item => String(item.request_status || '').toLowerCase()));
+      const requestStatus = statusSet.size === 1 ? (primary.request_status || '-') : 'Mixed';
+      const userComment = firstTextValue(...sorted.map(item => item.user_comment));
+      const allComments = [];
+      sorted.forEach(item => {
+        if (Array.isArray(item.all_comments)) {
+          allComments.push(...item.all_comments);
+        }
+      });
+
+      const requestIds = sorted.map(item => item.request_id).filter(Boolean);
+      const bookingIds = sorted.map(item => item.booking_id).filter(Boolean);
+      const slotRanges = sorted.map(item => ({
+        request_id: item.request_id,
+        booking_id: item.booking_id,
+        start: item.requested_start,
+        end: item.requested_end,
+        status: item.request_status,
+      }));
+
+      const groupDomId = String(key).replace(/[^a-zA-Z0-9_-]/g, '-');
+
+      return {
+        ...primary,
+        group_key: key,
+        group_dom_id: groupDomId,
+        request_status: requestStatus,
+        slot_count: sorted.length,
+        slot_ranges: slotRanges,
+        request_ids: requestIds,
+        booking_ids: bookingIds,
+        user_comment: userComment,
+        all_comments: allComments,
+      };
     }
 
     function renderRequestNote(label, value) {
@@ -1335,6 +1584,64 @@
       }
     }
 
+    async function applyOverrideActionToGroup(requestIds, fallbackReason = '') {
+      const ids = Array.isArray(requestIds) ? requestIds.map(id => Number(id)).filter(Boolean) : [];
+      if (!ids.length) {
+        setMessage('Invalid request id for override.', '#dc2626');
+        return;
+      }
+
+      const newStatusRaw = window.prompt('Override status (Approved, Rejected, Cancelled, Expired):', 'Approved');
+      if (!newStatusRaw) {
+        return;
+      }
+
+      const normalized = String(newStatusRaw).trim().toLowerCase();
+      const statusMap = {
+        approved: 'Approved',
+        rejected: 'Rejected',
+        cancelled: 'Cancelled',
+        canceled: 'Cancelled',
+        expired: 'Expired'
+      };
+      const new_status = statusMap[normalized] || '';
+      if (!new_status) {
+        setMessage('Invalid override status.', '#dc2626');
+        showToast('Invalid override status.', 'error');
+        return;
+      }
+
+      setMessage('Applying override...');
+      const failed = [];
+      for (const id of ids) {
+        try {
+          const res = await fetch(`/api/bookings/${id}/override`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+            body: JSON.stringify({
+              new_status,
+              reason: fallbackReason || `${roleLabel} override`
+            })
+          });
+          const data = await res.json();
+          if (!res.ok) {
+            failed.push(data.error || `Request ${id} failed`);
+          }
+        } catch (error) {
+          failed.push(`Request ${id} failed`);
+        }
+      }
+
+      if (failed.length) {
+        setMessage(failed[0], '#dc2626');
+        showToast('Some overrides failed.', 'error');
+      } else {
+        setMessage('Status overridden.', '#16a34a');
+        showToast('Override successful.', 'success');
+      }
+      await loadDashboard();
+    }
+
     function renderPending(items) {
       const count = Array.isArray(items) ? items.length : 0;
       pendingSubtitle.textContent = count > 0
@@ -1352,6 +1659,61 @@
         const avatarClass = index % 3 === 0 ? '' : index % 3 === 1 ? 'alt' : 'third';
         const initials = (item.requester_name || item.username || '?').trim().slice(0, 1).toUpperCase();
         const requesterComment = requesterCommentFor(item);
+        const slotCount = item.slot_count || 1;
+        const multiSlot = slotCount > 1;
+        const detailsId = item.group_dom_id || String(item.request_id);
+        const requestLabel = item.request_group_id ? `Group ID: ${item.request_group_id}` : `Request ID: #${item.request_id}`;
+        const timeSummary = multiSlot
+          ? `Multiple slots (${slotCount})`
+          : `${fmt(item.requested_start)}<br>${fmt(item.requested_end)}`;
+        const slotList = multiSlot && Array.isArray(item.slot_ranges)
+          ? item.slot_ranges.map((slot, idx) => {
+              const status = slot.status ? ` (${slot.status})` : '';
+              return `${idx + 1}. ${fmt(slot.start)} → ${fmt(slot.end)}${status}`;
+            }).join('<br>')
+          : '';
+
+        // Build per-slot rows for multi-slot groups
+        const slotRowsHtml = multiSlot && Array.isArray(item.slot_ranges)
+          ? item.slot_ranges.map((slot, idx) => {
+              const slotStatusRaw = String(slot.status || 'pending').toLowerCase();
+              const isPending = slotStatusRaw.includes('pending');
+              const statusDisplay = isPending ? 'Pending' : (slot.status || 'Unknown');
+              const statusClass = isPending ? 'pending' : (slotStatusRaw === 'approved' ? 'approved' : 'rejected');
+              return `
+                <div class="slot-row${!isPending ? ' slot-decided' : ''}">
+                  <div class="slot-info">
+                    <span class="slot-num">${idx + 1}</span>
+                    <span class="slot-time">${fmt(slot.start)} → ${fmt(slot.end)}</span>
+                    <span class="pill ${statusClass}">${escapeHtml(statusDisplay)}</span>
+                  </div>
+                  ${isPending && slot.request_id ? `
+                  <div class="slot-actions">
+                    <button class="btn btn-reject-sm" type="button" data-slot-id="${slot.request_id}" data-decision="rejected" data-comment-id="${detailsId}">Reject</button>
+                    <button class="btn btn-approve-sm" type="button" data-slot-id="${slot.request_id}" data-decision="approved" data-comment-id="${detailsId}">Approve</button>
+                  </div>` : (!isPending ? `<span class="slot-decided-label">${escapeHtml(statusDisplay)}</span>` : '')}
+                </div>`;
+            }).join('')
+          : '';
+        const pendingSlotCount = multiSlot && Array.isArray(item.slot_ranges)
+          ? item.slot_ranges.filter(s => String(s.status || 'pending').toLowerCase().includes('pending')).length
+          : 0;
+        const approveLabel = multiSlot ? `Approve All (${pendingSlotCount})` : 'Approve';
+        const rejectLabel = multiSlot ? `Reject All (${pendingSlotCount})` : 'Reject';
+
+        const bookingIdLabel = item.booking_ids && item.booking_ids.length > 1
+          ? `Booking IDs: ${item.booking_ids.join(', ')}`
+          : `Booking ID: ${item.booking_id || 'No booking ID'}`;
+        const requestIds = Array.isArray(item.request_ids) ? item.request_ids : [item.request_id].filter(Boolean);
+        const requestIdsAttr = requestIds.join(',');
+
+        const pendingRequestIds = multiSlot && Array.isArray(item.slot_ranges)
+          ? item.slot_ranges
+              .filter(slot => String(slot.status || 'pending').toLowerCase().includes('pending'))
+              .map(slot => slot.request_id)
+              .filter(Boolean)
+          : requestIds;
+        const pendingRequestIdsAttr = pendingRequestIds.join(',');
         return `
           <article class="request-card" data-request-id="${item.request_id}">
             <div class="request-top">
@@ -1359,10 +1721,10 @@
                 <div class="avatar ${avatarClass}">${initials}</div>
                 <div>
                   <div class="requester-name">${item.requester_name || item.name || item.username || 'Unknown requester'}</div>
-                  <div class="requester-meta">${item.requester_department || item.department || 'No department'} · ${item.booking_id || 'No booking ID'}</div>
+                  <div class="requester-meta">${item.requester_department || item.department || 'No department'} · ${bookingIdLabel}</div>
                 </div>
               </div>
-              <div class="request-id">Request ID: #${item.request_id}</div>
+              <div class="request-id">${requestLabel}</div>
             </div>
 
             <div class="detail-grid">
@@ -1372,7 +1734,7 @@
               </div>
               <div class="detail-box">
                 <div class="detail-label">Date & Time</div>
-                <div class="detail-value">${fmt(item.requested_start)}<br>${fmt(item.requested_end)}</div>
+                <div class="detail-value">${timeSummary}</div>
               </div>
               <div class="detail-box">
                 <div class="detail-label">Event Type</div>
@@ -1380,10 +1742,22 @@
               </div>
             </div>
 
+            ${multiSlot ? `
+            <div class="slot-list-container">
+              <button class="slot-list-toggle" type="button" data-slot-toggle="${detailsId}">
+                <span>⏱ Time Slots — ${pendingSlotCount} of ${slotCount} pending</span>
+                <span class="toggle-icon">▾</span>
+              </button>
+              <div class="slot-list" id="slots-${detailsId}">
+                ${slotRowsHtml}
+              </div>
+            </div>
+            ` : ''}
+
             ${renderRequestNote('User Comment', requesterComment)}
             ${(item.all_comments && item.all_comments.length > 0) ? item.all_comments.map(c => `<div style="margin-top:6px; padding:6px; background:#f8fafc; border-left:3px solid #64748b; white-space:pre-wrap; word-break:break-word;"><strong>${escapeHtml(String(c.role || 'Approver').toUpperCase())} Comment:</strong> ${escapeHtml(c.comment || '-')}</div>`).join('') : ''}
 
-            <div class="detail-box hidden request-details" id="details-${item.request_id}">
+            <div class="detail-box hidden request-details" id="details-${detailsId}">
               <div class="detail-label">Full Request Details</div>
                 <div class="detail-value">
                 Status: ${item.request_status || '-'}<br>
@@ -1392,6 +1766,7 @@
                 Contact: ${item.requester_phone || item.phone || 'Not provided'}<br>
                 Persons: ${item.number_of_persons || '-'}<br>
                 Equipment: ${item.equipment_needs || 'None requested'}<br>
+                ${multiSlot && slotList ? `Slots:<br>${slotList}<br>` : ''}
                 ${item.document_path ? `
                   <div style="margin-top:12px; padding-top:10px; border-top:1px solid var(--border)">
                     <div style="font-size:11px; text-transform:uppercase; letter-spacing:0.5px; color:var(--muted); margin-bottom:6px; font-weight:600">Supporting Document</div>
@@ -1407,38 +1782,95 @@
               </div>
             </div>
 
-            <textarea class="comment-area" id="comment-${item.request_id}" placeholder="Optional comment for this decision"></textarea>
+            <textarea class="comment-area" id="comment-${detailsId}" placeholder="Optional comment for this decision"></textarea>
 
             <div class="request-actions">
-              <button class="view-btn" type="button" data-toggle="${item.request_id}">View Details</button>
+              <button class="view-btn" type="button" data-toggle="${detailsId}">View Details</button>
               <div class="decision-group">
-                <button class="btn btn-reject" type="button" data-id="${item.request_id}" data-decision="rejected">Reject</button>
-                <button class="btn btn-dark btn-approve" type="button" data-id="${item.request_id}" data-decision="approved">Approve</button>
-                ${canOverride ? `<button class="btn btn-override" type="button" data-id="${item.request_id}" data-action="override">Override</button>` : ''}
+                ${multiSlot ? '<span class="batch-label">Batch:</span>' : ''}
+                <button class="btn btn-reject" type="button" data-ids="${pendingRequestIdsAttr}" data-decision="rejected" data-comment-id="${detailsId}">${rejectLabel}</button>
+                <button class="btn btn-dark btn-approve" type="button" data-ids="${pendingRequestIdsAttr}" data-decision="approved" data-comment-id="${detailsId}">${approveLabel}</button>
+                ${canOverride ? `<button class="btn btn-override" type="button" data-ids="${requestIdsAttr}" data-action="override" data-comment-id="${detailsId}">Override</button>` : ''}
               </div>
             </div>
           </article>
         `;
       }).join('');
 
-      pendingList.querySelectorAll('button[data-id]').forEach(btn => {
+      // Individual slot approve/reject handlers
+      pendingList.querySelectorAll('button[data-slot-id]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
+          const slotId = btn.getAttribute('data-slot-id');
           const decision = btn.getAttribute('data-decision');
-          const comment = document.getElementById(`comment-${id}`).value;
-          btn.disabled = true;
+          const commentId = btn.getAttribute('data-comment-id');
+          const comment = document.getElementById(`comment-${commentId}`)?.value || '';
+          const slotRow = btn.closest('.slot-row');
+          slotRow?.querySelectorAll('button').forEach(b => b.disabled = true);
           setMessage('Submitting decision...');
           try {
-            const res = await fetch(`/api/bookings/${id}/decision`, {
+            const res = await fetch(`/api/bookings/${slotId}/decision`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
               body: JSON.stringify({ decision, comment })
             });
             const data = await res.json();
             if (!res.ok || !data.ok) {
-              setMessage(data.message || data.error || 'Unable to save decision.', '#dc2626');
+              setMessage(data.message || data.error || 'Decision failed.', '#dc2626');
+              showToast('Decision failed.', 'error');
+              slotRow?.querySelectorAll('button').forEach(b => b.disabled = false);
             } else {
-              setMessage(data.message || 'Decision saved.', '#16a34a');
+              showToast(`Slot ${decision} successfully.`, 'success');
+              setMessage('Decision saved.', '#16a34a');
+              await loadDashboard();
+            }
+          } catch (error) {
+            setMessage('Unable to save decision.', '#dc2626');
+            showToast('Unable to save decision.', 'error');
+            slotRow?.querySelectorAll('button').forEach(b => b.disabled = false);
+          }
+        });
+      });
+
+      // Slot list toggle (expand/collapse) handlers
+      pendingList.querySelectorAll('button[data-slot-toggle]').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const id = btn.getAttribute('data-slot-toggle');
+          const slotListEl = document.getElementById(`slots-${id}`);
+          if (!slotListEl) return;
+          slotListEl.classList.toggle('collapsed');
+          btn.classList.toggle('collapsed');
+        });
+      });
+
+      // Group-level (batch) approve/reject handlers
+      pendingList.querySelectorAll('button[data-ids][data-decision]').forEach(btn => {
+        btn.addEventListener('click', async () => {
+          const idsRaw = btn.getAttribute('data-ids') || '';
+          const ids = idsRaw.split(',').map(value => value.trim()).filter(Boolean);
+          const decision = btn.getAttribute('data-decision');
+          const commentId = btn.getAttribute('data-comment-id');
+          const comment = document.getElementById(`comment-${commentId}`)?.value || '';
+          btn.disabled = true;
+          setMessage('Submitting decision...');
+          try {
+            const failed = [];
+            for (const id of ids) {
+              const res = await fetch(`/api/bookings/${id}/decision`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                body: JSON.stringify({ decision, comment })
+              });
+              const data = await res.json();
+              if (!res.ok || !data.ok) {
+                failed.push(data.message || data.error || `Request ${id} failed`);
+              }
+            }
+
+            if (failed.length) {
+              setMessage(failed[0], '#dc2626');
+              showToast('Some decisions failed.', 'error');
+            } else {
+              setMessage('Decision saved.', '#16a34a');
               await loadDashboard();
             }
           } catch (error) {
@@ -1461,11 +1893,13 @@
 
       pendingList.querySelectorAll('button[data-action="override"]').forEach(btn => {
         btn.addEventListener('click', async () => {
-          const id = btn.getAttribute('data-id');
-          const comment = document.getElementById(`comment-${id}`)?.value || '';
+          const idsRaw = btn.getAttribute('data-ids') || '';
+          const ids = idsRaw.split(',').map(value => value.trim()).filter(Boolean);
+          const commentId = btn.getAttribute('data-comment-id');
+          const comment = document.getElementById(`comment-${commentId}`)?.value || '';
           btn.disabled = true;
           try {
-            await applyOverrideAction(id, comment || `${roleLabel} override`);
+            await applyOverrideActionToGroup(ids, comment || `${roleLabel} override`);
           } finally {
             btn.disabled = false;
           }
@@ -1543,14 +1977,15 @@
         conflictCount.textContent = String(summary.counts?.schedule_conflicts ?? 0);
 
         const pendingListData = Array.isArray(pending) ? pending : [];
+        const groupedPending = groupPendingRequests(pendingListData);
         const historyData = Array.isArray(history.history) ? history.history : [];
 
-        renderPending(pendingListData);
+        renderPending(groupedPending);
         renderHistory(historyData);
         renderRecentActions(Array.isArray(summary.recent_actions) ? summary.recent_actions : []);
 
-        weeklyQuote.textContent = pendingListData.length > 0
-          ? `"You have ${pendingListData.length} request${pendingListData.length === 1 ? '' : 's'} waiting for action this week."`
+        weeklyQuote.textContent = groupedPending.length > 0
+          ? `"You have ${groupedPending.length} request${groupedPending.length === 1 ? '' : 's'} waiting for action this week."`
           : '"The hall booking workflow is operating smoothly."';
 
         setMessage('Dashboard loaded successfully.', '#16a34a');

@@ -10,6 +10,7 @@ import atexit # db
 import importlib # dynamic lib integration
 import smtplib # smtp
 import uuid # unquie id
+import html
 from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import secrets
@@ -306,6 +307,69 @@ def sync_smtp_runtime_config():
 
     if password_value:
         app.config['MAIL_PASSWORD'] = password_value
+
+
+def _update_env_file_value(key, value, env_path=None):
+    """Update or append a key=value pair in the .env file."""
+    if not key:
+        return
+
+    env_path = env_path or os.path.join(PROJECT_ROOT, '.env')
+    value = '' if value is None else str(value)
+
+    if not os.path.exists(env_path):
+        with open(env_path, 'w', encoding='utf-8') as env_file:
+            env_file.write(f"{key}={value}\n")
+        return
+
+    updated = False
+    lines = []
+    with open(env_path, 'r', encoding='utf-8') as env_file:
+        for raw_line in env_file:
+            line = raw_line.rstrip('\n')
+            if line.startswith(f"{key}="):
+                lines.append(f"{key}={value}")
+                updated = True
+            else:
+                lines.append(line)
+
+    if not updated:
+        lines.append(f"{key}={value}")
+
+    with open(env_path, 'w', encoding='utf-8') as env_file:
+        env_file.write("\n".join(lines) + "\n")
+
+
+def sync_admin_otp_email(admin_email):
+    """Sync admin OTP email to users table and .env for consistency."""
+    admin_email = (admin_email or '').strip()
+    if not admin_email:
+        return
+
+    os.environ['ADMIN_OTP_EMAIL'] = admin_email
+    _update_env_file_value('ADMIN_OTP_EMAIL', admin_email)
+
+    admin_username = (get_config('admin_username') or os.environ.get('ADMIN_USERNAME', 'admin')).strip()
+    if not admin_username:
+        return
+
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute("UPDATE users SET email=%s WHERE username=%s", (admin_email, admin_username))
+    conn.commit()
+    conn.close()
+
+    ensure_user_exists_for_otp(admin_username, role='admin', email=admin_email)
+
+
+def sync_admin_env_credentials(admin_username=None, admin_password=None):
+    """Sync admin credentials into the .env file and environment."""
+    if admin_username is not None:
+        os.environ['ADMIN_USERNAME'] = str(admin_username)
+        _update_env_file_value('ADMIN_USERNAME', admin_username)
+    if admin_password is not None:
+        os.environ['ADMIN_PASSWORD'] = str(admin_password)
+        _update_env_file_value('ADMIN_PASSWORD', admin_password)
 
 
 def current_role():
@@ -740,7 +804,7 @@ def _fetch_request_context(request_id, role_name):
         """
         SELECT br.request_id, br.booking_id, br.room_no, br.purpose,
                br.requested_start, br.requested_end, br.user_comment,
-               u.name AS requester_name, u.email AS requester_email,
+             u.name AS requester_name, u.email AS requester_email, u.phone AS requester_phone,
                COALESCE(br.requester_department, u.department) AS requester_department,
                COALESCE(h.hall_name, CONCAT('Hall ', br.room_no)) AS hall_name,
                ra.action_token
@@ -848,6 +912,7 @@ def _build_approval_email_html(approver_name, role_name, context, approve_link, 
     hall_display = context.get('hall_name') or f"Hall {context['room_no']}"
     requester_name = context.get('requester_name') or '-'
     requester_dept = context.get('requester_department') or '-'
+    requester_phone = context.get('requester_phone') or '-'
     start_str = str(context.get('requested_start') or '-')
     end_str = str(context.get('requested_end') or '-')
     org_name = get_config('organization_name') or 'Meeting Hall System'
@@ -901,6 +966,10 @@ def _build_approval_email_html(approver_name, role_name, context, approve_link, 
                     <td style="color:#64748b;font-size:13px;font-weight:600;">Department</td>
                     <td style="color:#1e293b;font-size:13px;">{requester_dept}</td>
                   </tr>
+                                    <tr>
+                                        <td style="color:#64748b;font-size:13px;font-weight:600;">Phone</td>
+                                        <td style="color:#1e293b;font-size:13px;">{requester_phone}</td>
+                                    </tr>
                   <tr>
                     <td style="color:#64748b;font-size:13px;font-weight:600;">Hall</td>
                     <td style="color:#1e293b;font-size:13px;">{hall_display}</td>
@@ -1161,6 +1230,7 @@ def send_approval_email_for_stage(request_id, role_name, department=None):
             f"A booking request requires your action at {role_name} stage.\n"
             f"Booking ID: {context['booking_id']}\n"
             f"Requester: {context.get('requester_name') or '-'}\n"
+            f"Phone: {context.get('requester_phone') or '-'}\n"
             f"Department: {context.get('requester_department') or '-'}\n"
             f"Hall: {context.get('hall_name') or context['room_no']}\n"
             f"Purpose: {context['purpose']}\n"
@@ -1715,7 +1785,15 @@ def validate_user_credentials(username, password):
     if not row:
         return False
 
-    return check_password_hash(row[0], password)
+    stored_hash = row[0]
+    try:
+        return check_password_hash(stored_hash, password)
+    except ValueError:
+        try:
+            import bcrypt
+            return bcrypt.checkpw(password.encode('utf-8'), stored_hash.encode('utf-8'))
+        except Exception:
+            return False
 
 
 @app.route('/')
@@ -1902,36 +1980,32 @@ def api_change_password():
         if not otp_code:
             return jsonify({'ok': False, 'message': 'OTP is required for approver accounts', 'needs_otp': True}), 400
 
-        # Verify OTP from the login_otp_challenges table
         challenge_id = session.get('settings_otp_challenge_id')
         if not challenge_id:
             return jsonify({'ok': False, 'message': 'Please request an OTP first', 'needs_otp': True}), 400
 
-        conn = get_connection()
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute(
-            """SELECT otp_hash FROM login_otp_challenges
-               WHERE id = %s AND username = %s AND consumed_at IS NULL
-               AND expires_at > UTC_TIMESTAMP()""",
-            (challenge_id, username),
-        )
-        challenge = cursor.fetchone()
-        if not challenge:
-            conn.close()
+        challenge = get_login_otp_challenge(challenge_id)
+        if not challenge or challenge.get('consumed_at') or challenge.get('username') != username:
             session.pop('settings_otp_challenge_id', None)
-            return jsonify({'ok': False, 'message': 'OTP expired or invalid. Request a new one.', 'needs_otp': True}), 400
+            return jsonify({'ok': False, 'message': 'OTP is invalid or has already been used. Request a new one.', 'needs_otp': True}), 400
+
+        if challenge_is_expired(challenge):
+            consume_login_otp_challenge(challenge_id)
+            session.pop('settings_otp_challenge_id', None)
+            return jsonify({'ok': False, 'message': 'OTP expired. Request a new one.', 'needs_otp': True}), 400
+
+        if challenge_attempts_exhausted(challenge):
+            consume_login_otp_challenge(challenge_id)
+            session.pop('settings_otp_challenge_id', None)
+            return jsonify({'ok': False, 'message': 'Too many incorrect attempts. Request a new OTP.', 'needs_otp': True}), 400
 
         if not check_password_hash(challenge['otp_hash'], otp_code):
-            conn.close()
-            return jsonify({'ok': False, 'message': 'Incorrect OTP'}), 403
+            increment_login_otp_attempt(challenge_id)
+            refreshed = get_login_otp_challenge(challenge_id)
+            remaining = int(challenge.get('max_attempts') or OTP_MAX_ATTEMPTS) - int((refreshed or {}).get('failed_attempts') or 0)
+            return jsonify({'ok': False, 'message': f'Incorrect OTP. {max(0, remaining)} attempt(s) remaining.'}), 403
 
-        # Consume the challenge
-        cursor.execute(
-            "UPDATE login_otp_challenges SET consumed_at = UTC_TIMESTAMP() WHERE id = %s",
-            (challenge_id,),
-        )
-        conn.commit()
-        conn.close()
+        consume_login_otp_challenge(challenge_id)
         session.pop('settings_otp_challenge_id', None)
 
     try:
@@ -1956,27 +2030,9 @@ def api_send_settings_otp():
     if not user or not user.get('email'):
         return jsonify({'ok': False, 'message': 'No email address on file'}), 400
 
-    import random
-    otp = str(secrets.randbelow(100000, 999999))
-
-    # Store OTP challenge
-    conn = get_connection()
-    cursor = conn.cursor()
-    otp_hash = generate_password_hash(otp)
-    invalidate_existing_otp_challenges(username)
-    cursor.execute(
-        """INSERT INTO login_otp_challenges (username, otp_hash, expires_at)
-           VALUES (%s, %s, DATE_ADD(UTC_TIMESTAMP(), INTERVAL %s SECOND))""",
-        (username, otp_hash, OTP_EXPIRY),
-    )
-    challenge_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
-
-    session['settings_otp_challenge_id'] = challenge_id
-
-    result = send_login_otp_email(user['email'], username, role, otp)
+    result = create_login_otp_challenge(username, role, user['email'])
     if result.get('ok'):
+        session['settings_otp_challenge_id'] = result['challenge_id']
         return jsonify({'ok': True, 'message': f'OTP sent to {user["email"]}'}), 200
     return jsonify({'ok': False, 'message': result.get('message', 'Failed to send OTP')}), 500
 
@@ -1997,15 +2053,43 @@ def api_delete_account():
     if not validate_user_credentials(username, password):
         return jsonify({'ok': False, 'message': 'Incorrect password'}), 403
 
+    conn = None
     try:
         conn = get_connection()
         cursor = conn.cursor()
+
+        cursor.execute("SELECT request_id FROM booking_requests WHERE username=%s", (username,))
+        request_ids = [row[0] for row in cursor.fetchall()]
+        placeholders, id_params = _build_in_clause(request_ids)
+        if placeholders:
+            cursor.execute(
+                f"DELETE FROM request_approvals WHERE request_id IN ({placeholders})",
+                id_params,
+            )
+            cursor.execute(
+                f"DELETE FROM email_logs WHERE request_id IN ({placeholders})",
+                id_params,
+            )
+
+        cursor.execute("DELETE FROM notifications WHERE username = %s", (username,))
+        cursor.execute("DELETE FROM booking_details WHERE username = %s", (username,))
+        cursor.execute("DELETE FROM login_otp_challenges WHERE username = %s", (username,))
+        cursor.execute("DELETE FROM booking_requests WHERE username = %s", (username,))
         cursor.execute("DELETE FROM users WHERE username = %s", (username,))
         conn.commit()
         conn.close()
         clear_authenticated_session()
         return jsonify({'ok': True, 'message': 'Account deleted successfully'}), 200
     except Exception as e:
+        if conn:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            try:
+                conn.close()
+            except Exception:
+                pass
         return jsonify({'ok': False, 'message': str(e)}), 500
 
 
@@ -2080,6 +2164,16 @@ def admin_mail_health_page():
     user = get_user_details(session.get('username')) if session.get('username') else None
     config = get_all_config()
     return render_template('admin_mail_health.html', user=user, config=config)
+
+
+@app.route('/admin-logs.html')
+@require_login
+@require_roles('admin')
+def admin_logs_page():
+    user = get_user_details(session.get('username')) if session.get('username') else None
+    config = get_all_config()
+    return render_template('admin_logs.html', user=user, config=config)
+
 
 @app.route('/admin-config.html')
 @require_login
@@ -2703,46 +2797,106 @@ def create_booking():
             elif isinstance(time_slots_raw, list):
                 time_slots = time_slots_raw
 
-        result = create_booking_request(
-            username=username,
-            room_no=room_no,
-            purpose=purpose,
-            number_of_persons=number_of_persons,
-            required_equipment=required_equipment,
-            start_datetime=start_datetime,
-            end_datetime=end_datetime,
-            duration_minutes=duration_minutes,
-            buffer_minutes=buffer_minutes,
-            document_path=document_path,
-            time_slots=time_slots,
-            user_comment=user_comment,
-        )
+        normalized_slots = []
+        if isinstance(time_slots, list):
+            seen_slot_keys = set()
+            for idx, slot in enumerate(time_slots, start=1):
+                if not isinstance(slot, dict):
+                    raise ValueError(f"time slot #{idx} is invalid")
 
-        request_status = result.get('request_status')
-        if request_status and request_status.startswith('Pending_'):
-            next_role = request_status.split('_')[1]
-            try:
-                send_approval_email_for_stage(result['request_id'], next_role)
-            except Exception:
-                pass
-            # Notify the requester that their booking was submitted
-            try:
-                send_booking_submitted_email(result['request_id'], username)
-            except Exception:
-                pass
-        elif request_status == 'Approved':
-            # Notify the requester that their booking was submitted and auto-approved
-            try:
-                send_booking_submitted_email(result['request_id'], username)
-            except Exception:
-                pass
-        elif request_status == 'Waitlisted' and result.get('suggested_start'):
-            try:
-                send_alternative_slot_email(username, result)
-            except Exception:
-                pass
+                slot_start_raw = slot.get('start_datetime') or slot.get('start')
+                slot_end_raw = slot.get('end_datetime') or slot.get('end')
+                if not slot_start_raw or not slot_end_raw:
+                    raise ValueError(f"time slot #{idx} requires start_datetime and end_datetime")
 
-        return jsonify({"message": "booking request submitted", **result}), 201
+                slot_start_dt = parse_datetime(slot_start_raw)
+                slot_end_dt = parse_datetime(slot_end_raw)
+                if not slot_start_dt or not slot_end_dt or slot_end_dt <= slot_start_dt:
+                    raise ValueError(f"time slot #{idx} has an invalid time range")
+
+                slot_key = (slot_start_dt, slot_end_dt)
+                if slot_key in seen_slot_keys:
+                    continue
+                seen_slot_keys.add(slot_key)
+
+                normalized_slots.append(
+                    {
+                        'date': slot.get('date') or slot_start_dt.date().isoformat(),
+                        'start_datetime': slot_start_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                        'end_datetime': slot_end_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                        'time_label': slot.get('time_label') or f"{slot_start_dt.strftime('%H:%M')} - {slot_end_dt.strftime('%H:%M')}",
+                    }
+                )
+
+        def notify_booking_result(result):
+            request_status = result.get('request_status')
+            if request_status and request_status.startswith('Pending_'):
+                next_role = request_status.split('_')[1]
+                try:
+                    send_approval_email_for_stage(result['request_id'], next_role)
+                except Exception:
+                    pass
+                try:
+                    send_booking_submitted_email(result['request_id'], username)
+                except Exception:
+                    pass
+            elif request_status == 'Approved':
+                try:
+                    send_booking_submitted_email(result['request_id'], username)
+                except Exception:
+                    pass
+            elif request_status == 'Waitlisted' and result.get('suggested_start'):
+                try:
+                    send_alternative_slot_email(username, result)
+                except Exception:
+                    pass
+
+        slot_requests = normalized_slots or [
+            {
+                'start_datetime': start_datetime,
+                'end_datetime': end_datetime,
+                'time_label': '',
+            }
+        ]
+
+        request_group_id = None
+        if len(slot_requests) > 1:
+            request_group_id = f"GRP-{uuid.uuid4().hex[:10].upper()}"
+
+        created_results = []
+        for slot in slot_requests:
+            slot_start_dt = parse_datetime(slot['start_datetime'])
+            slot_end_dt = parse_datetime(slot['end_datetime'])
+            slot_duration = int((slot_end_dt - slot_start_dt).total_seconds() // 60)
+            result = create_booking_request(
+                username=username,
+                room_no=room_no,
+                purpose=purpose,
+                number_of_persons=number_of_persons,
+                required_equipment=required_equipment,
+                start_datetime=slot['start_datetime'],
+                end_datetime=slot['end_datetime'],
+                duration_minutes=slot_duration,
+                buffer_minutes=buffer_minutes,
+                document_path=document_path,
+                time_slots=[slot] if normalized_slots else time_slots,
+                user_comment=user_comment,
+                request_group_id=request_group_id,
+            )
+            notify_booking_result(result)
+            created_results.append(result)
+
+        primary_result = created_results[0]
+        return jsonify(
+            {
+                "message": "booking request submitted",
+                **primary_result,
+                "bookings": created_results,
+                "booking_ids": [item.get('booking_id') for item in created_results],
+                "booking_count": len(created_results),
+                "request_group_id": request_group_id,
+            }
+        ), 201
     except ValueError as ve:
         return jsonify({"error": str(ve)}), 400
     except Exception as e:
@@ -4047,6 +4201,145 @@ def run_stale_expiry():
         return jsonify({'error': str(e)}), 500
 
 
+# ─── Public Contact Form ───────────────────────────────────────────────────────
+
+# Simple in-memory rate limiter: {ip: last_sent_timestamp}
+_contact_rate = {}
+_CONTACT_COOLDOWN = 60  # seconds between submissions per IP
+
+
+@app.route('/api/contact', methods=['POST'])
+@csrf.exempt
+def contact_us():
+    """
+    Public endpoint – no login required.
+    Sends the contact form data as an email to the configured system/default sender address.
+    """
+    try:
+        payload = request.get_json(silent=True) or request.form
+
+        sender_name    = (payload.get('name')    or '').strip()
+        sender_email   = (payload.get('email')   or '').strip()
+        subject_raw    = (payload.get('subject') or '').strip()
+        message_body   = (payload.get('message') or '').strip()
+
+        # ── Validation ──────────────────────────────────────────────────────
+        if not sender_name:
+            return jsonify({'ok': False, 'error': 'Name is required'}), 400
+        if not sender_email or '@' not in sender_email:
+            return jsonify({'ok': False, 'error': 'A valid email address is required'}), 400
+        if not message_body:
+            return jsonify({'ok': False, 'error': 'Message cannot be empty'}), 400
+        if len(message_body) > 3000:
+            return jsonify({'ok': False, 'error': 'Message is too long (max 3000 characters)'}), 400
+
+        subject = subject_raw or f'Contact Form: message from {sender_name}'
+
+        # ── Rate limiting (per IP, 1 submission per minute) ─────────────────
+        client_ip = request.remote_addr or 'unknown'
+        if str(os.environ.get('TRUST_PROXY_HEADERS', '')).strip().lower() in {'1', 'true', 'yes', 'on'}:
+            client_ip = (request.headers.get('X-Forwarded-For') or client_ip).split(',')[0].strip() or 'unknown'
+        now_ts = datetime.datetime.utcnow().timestamp()
+        last_sent = _contact_rate.get(client_ip, 0)
+        if now_ts - last_sent < _CONTACT_COOLDOWN:
+            wait = int(_CONTACT_COOLDOWN - (now_ts - last_sent))
+            return jsonify({'ok': False, 'error': f'Please wait {wait}s before sending another message'}), 429
+
+        # ── Resolve recipient (system / default sender address) ─────────────
+        recipient = (
+            (get_config('system_email') or '').strip()
+            or (app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
+            or (app.config.get('MAIL_USERNAME') or '').strip()
+        )
+
+        if not recipient:
+            return jsonify({'ok': False, 'error': 'Mail is not configured on the server. Please try again later.'}), 503
+
+        if not mail or not Message:
+            return jsonify({'ok': False, 'error': 'Mail service is unavailable. Please try again later.'}), 503
+
+        mail_sender = _resolve_email_sender()
+        if not mail_sender:
+            return jsonify({'ok': False, 'error': 'Mail sender is not configured. Please try again later.'}), 503
+
+        # ── Build & send email ───────────────────────────────────────────────
+        org_name = get_config('organization_name') or 'Meeting Hall System'
+        email_subject = f'[{org_name}] {subject}'
+        safe_name = html.escape(sender_name, quote=True)
+        safe_email = html.escape(sender_email, quote=True)
+        safe_subject = html.escape(subject_raw or '(no subject)', quote=True)
+        safe_message = html.escape(message_body, quote=True)
+        safe_org_name = html.escape(org_name, quote=True)
+
+        html_body = f"""
+        <html><body style="font-family:Inter,Arial,sans-serif;background:#f4f7fb;margin:0;padding:20px;">
+          <div style="max-width:600px;margin:auto;background:#fff;border-radius:16px;overflow:hidden;
+                      box-shadow:0 4px 24px rgba(15,23,42,.10);">
+            <div style="background:linear-gradient(135deg,#0f2748,#17375f);padding:28px 32px;">
+              <h2 style="color:#fff;margin:0;font-size:20px;">📬 New Contact Form Submission</h2>
+              <p style="color:#93c5fd;margin:6px 0 0;font-size:14px;">{safe_org_name}</p>
+            </div>
+            <div style="padding:28px 32px;">
+              <table style="width:100%;border-collapse:collapse;font-size:15px;">
+                <tr>
+                  <td style="padding:8px 0;color:#64748b;font-weight:600;width:110px;">From</td>
+                  <td style="padding:8px 0;">{safe_name}</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;color:#64748b;font-weight:600;">Email</td>
+                  <td style="padding:8px 0;"><a href="mailto:{safe_email}" style="color:#2563eb;">{safe_email}</a></td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 0;color:#64748b;font-weight:600;">Subject</td>
+                  <td style="padding:8px 0;">{safe_subject}</td>
+                </tr>
+              </table>
+              <hr style="border:none;border-top:1px solid #e2e8f0;margin:20px 0;">
+              <h3 style="color:#0f2748;font-size:15px;margin:0 0 12px;">Message</h3>
+              <div style="background:#f8fafc;border-radius:10px;padding:18px;font-size:15px;
+                          color:#1e293b;white-space:pre-wrap;line-height:1.6;">{safe_message}</div>
+            </div>
+            <div style="background:#f1f5f9;padding:16px 32px;text-align:center;font-size:12px;color:#94a3b8;">
+              Sent via the Contact Us form on {safe_org_name} &bull; Reply directly to {safe_email}
+            </div>
+          </div>
+        </body></html>
+        """
+
+        msg = Message(
+            subject=email_subject,
+            recipients=[recipient],
+            sender=mail_sender,
+            reply_to=sender_email,
+        )
+        msg.html = html_body
+        msg.body = (
+            f"Contact Form Submission\n"
+            f"=======================\n"
+            f"From:    {sender_name}\n"
+            f"Email:   {sender_email}\n"
+            f"Subject: {subject_raw or '(no subject)'}\n\n"
+            f"Message:\n{message_body}"
+        )
+
+        _contact_rate[client_ip] = now_ts
+        send_email_in_thread(msg)
+
+        _log_security_event(
+            category='contact',
+            severity='low',
+            title='Contact form submitted',
+            message=f"Contact form from {sender_name} <{sender_email}>: {subject}",
+            username='anonymous',
+            status_code=200,
+        )
+
+        return jsonify({'ok': True, 'message': 'Your message has been sent! We will get back to you soon.'}), 200
+
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+
+
 @app.route('/api/admin/mail/health', methods=['GET'])
 @require_login
 @require_roles('admin')
@@ -4087,6 +4380,192 @@ def admin_mail_test():
         return jsonify({'ok': True, 'message': f'test email sent to {recipient}'}), 200
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
+
+
+def _admin_log_paging():
+    try:
+        limit = int(request.args.get('limit', '50'))
+    except ValueError:
+        limit = 50
+    try:
+        offset = int(request.args.get('offset', '0'))
+    except ValueError:
+        offset = 0
+    return max(1, min(limit, 200)), max(0, offset)
+
+
+def _jsonify_datetime_rows(rows):
+    for row in rows:
+        for key, value in list(row.items()):
+            if isinstance(value, (datetime.datetime, datetime.date)):
+                row[key] = value.strftime('%Y-%m-%d %H:%M:%S')
+    return rows
+
+
+@app.route('/api/admin/logs/email', methods=['GET'])
+@require_login
+@require_roles('admin')
+def admin_email_logs():
+    conn = None
+    try:
+        limit, offset = _admin_log_paging()
+        q = (request.args.get('q') or '').strip()
+        email_type = (request.args.get('email_type') or '').strip()
+        status = (request.args.get('status') or '').strip()
+
+        where = []
+        params = []
+        if q:
+            like = f'%{q}%'
+            where.append(
+                """
+                (
+                    CAST(el.email_log_id AS CHAR) LIKE %s
+                    OR CAST(el.request_id AS CHAR) LIKE %s
+                    OR COALESCE(br.booking_id, '') LIKE %s
+                    OR COALESCE(el.recipient_email, '') LIKE %s
+                    OR COALESCE(el.recipient_role, '') LIKE %s
+                    OR COALESCE(el.email_type, '') LIKE %s
+                    OR COALESCE(el.status, '') LIKE %s
+                )
+                """
+            )
+            params.extend([like] * 7)
+        if email_type:
+            where.append("el.email_type = %s")
+            params.append(email_type)
+        if status:
+            where.append("el.status = %s")
+            params.append(status)
+
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM email_logs el
+            LEFT JOIN booking_requests br ON br.request_id = el.request_id
+            {where_sql}
+            """,
+            tuple(params),
+        )
+        total = int((cursor.fetchone() or {}).get('total') or 0)
+
+        cursor.execute(
+            f"""
+            SELECT
+                el.email_log_id,
+                el.request_id,
+                br.booking_id,
+                el.recipient_email,
+                el.recipient_role,
+                el.email_type,
+                el.sent_at,
+                el.clicked_at,
+                el.status,
+                CASE WHEN el.token IS NULL OR el.token = '' THEN FALSE ELSE TRUE END AS has_token
+            FROM email_logs el
+            LEFT JOIN booking_requests br ON br.request_id = el.request_id
+            {where_sql}
+            ORDER BY el.sent_at DESC, el.email_log_id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params + [limit, offset]),
+        )
+        rows = _jsonify_datetime_rows(cursor.fetchall())
+        return jsonify({'ok': True, 'logs': rows, 'total': total, 'limit': limit, 'offset': offset}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/admin/logs/otp', methods=['GET'])
+@require_login
+@require_roles('admin')
+def admin_otp_logs():
+    conn = None
+    try:
+        limit, offset = _admin_log_paging()
+        q = (request.args.get('q') or '').strip()
+        role = (request.args.get('role') or '').strip()
+        status = (request.args.get('status') or '').strip().lower()
+
+        where = []
+        params = []
+        if q:
+            like = f'%{q}%'
+            where.append(
+                """
+                (
+                    loc.challenge_id LIKE %s
+                    OR loc.username LIKE %s
+                    OR loc.role LIKE %s
+                    OR loc.email LIKE %s
+                )
+                """
+            )
+            params.extend([like] * 4)
+        if role:
+            where.append("loc.role = %s")
+            params.append(role)
+        if status == 'consumed':
+            where.append("loc.consumed_at IS NOT NULL")
+        elif status == 'locked':
+            where.append("loc.consumed_at IS NULL AND loc.failed_attempts >= loc.max_attempts")
+        elif status == 'expired':
+            where.append("loc.consumed_at IS NULL AND loc.expires_at <= UTC_TIMESTAMP() AND loc.failed_attempts < loc.max_attempts")
+        elif status == 'active':
+            where.append("loc.consumed_at IS NULL AND loc.expires_at > UTC_TIMESTAMP() AND loc.failed_attempts < loc.max_attempts")
+
+        where_sql = f"WHERE {' AND '.join(where)}" if where else ""
+        conn = get_connection()
+        cursor = conn.cursor(dictionary=True)
+        cursor.execute(
+            f"""
+            SELECT COUNT(*) AS total
+            FROM login_otp_challenges loc
+            {where_sql}
+            """,
+            tuple(params),
+        )
+        total = int((cursor.fetchone() or {}).get('total') or 0)
+
+        cursor.execute(
+            f"""
+            SELECT
+                loc.challenge_id,
+                loc.username,
+                loc.role,
+                loc.email,
+                loc.expires_at,
+                loc.failed_attempts,
+                loc.max_attempts,
+                loc.resend_available_at,
+                loc.consumed_at,
+                loc.created_at,
+                CASE
+                    WHEN loc.consumed_at IS NOT NULL THEN 'consumed'
+                    WHEN loc.failed_attempts >= loc.max_attempts THEN 'locked'
+                    WHEN loc.expires_at <= UTC_TIMESTAMP() THEN 'expired'
+                    ELSE 'active'
+                END AS challenge_status
+            FROM login_otp_challenges loc
+            {where_sql}
+            ORDER BY loc.created_at DESC, loc.challenge_id DESC
+            LIMIT %s OFFSET %s
+            """,
+            tuple(params + [limit, offset]),
+        )
+        rows = _jsonify_datetime_rows(cursor.fetchall())
+        return jsonify({'ok': True, 'logs': rows, 'total': total, 'limit': limit, 'offset': offset}), 200
+    except Exception as e:
+        return jsonify({'ok': False, 'error': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
 
 
 @app.route('/hod')
@@ -4183,9 +4662,20 @@ def manage_admin_config(config_key):
         
         set_config(config_key, config_value, description)
 
+        config_key_normalized = (config_key or '').strip().lower()
+
         # If SMTP-related config changes, apply immediately in runtime config.
-        if (config_key or '').strip().lower() in {'system_email', 'smtp_password'}:
+        if config_key_normalized in {'system_email', 'smtp_password'}:
             sync_smtp_runtime_config()
+
+        if config_key_normalized == 'admin_otp_email':
+            sync_admin_otp_email(config_value)
+
+        if config_key_normalized == 'admin_username':
+            sync_admin_env_credentials(admin_username=config_value)
+
+        if config_key_normalized == 'admin_password':
+            sync_admin_env_credentials(admin_password=config_value)
 
         return jsonify({
             'ok': True, 

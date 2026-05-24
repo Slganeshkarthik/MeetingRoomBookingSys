@@ -229,7 +229,7 @@
 
     .hero h1 {
       margin: 0;
-      font-size: clamp(34px, 4vw, 56px);
+      font-size: clamp(30px, 4vw, 50px);
       line-height: 0.95;
       letter-spacing: -0.05em;
     }
@@ -512,6 +512,9 @@
       border: 1px solid var(--line);
       box-shadow: 0 24px 60px rgba(10, 33, 66, 0.22);
       overflow: hidden;
+      max-height: 90vh;
+      display: flex;
+      flex-direction: column;
     }
 
     .details-head {
@@ -546,6 +549,7 @@
       padding: 18px;
       display: grid;
       gap: 12px;
+      overflow-y: auto;
     }
 
     .details-row {
@@ -995,7 +999,7 @@
         </article>
         <article class="stat rejected">
           <h3 id="rejectedCount">0</h3>
-          <div class="label">Rejected</div>
+          <div class="label">Rejected Slot</div>
           <div class="meta">Requests declined</div>
         </article>
         <article class="stat total">
@@ -1127,6 +1131,44 @@
       return `${s.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} - ${e.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
     }
 
+    function groupBookings(rows) {
+      const groups = new Map();
+      (Array.isArray(rows) ? rows : []).forEach(item => {
+        const key = item.request_group_id || `single-${item.request_id}`;
+        if (!groups.has(key)) {
+          groups.set(key, { key, items: [] });
+        }
+        groups.get(key).items.push(item);
+      });
+
+      return Array.from(groups.values()).map(group => buildGroupItem(group.items));
+    }
+
+    function buildGroupItem(items) {
+      const sorted = [...items].sort((a, b) => {
+        const da = parseLocalDate(a.requested_start);
+        const db = parseLocalDate(b.requested_start);
+        return (da ? da.getTime() : 0) - (db ? db.getTime() : 0);
+      });
+      const primary = sorted[0] || {};
+      const statusSet = new Set(sorted.map(item => String(item.request_status || '').toLowerCase()));
+      const status = statusSet.size === 1 ? (primary.request_status || '-') : 'Mixed';
+      return {
+        ...primary,
+        request_status: status,
+        slot_count: sorted.length,
+        slot_ranges: sorted.map(item => ({
+          start: item.requested_start,
+          end: item.requested_end,
+          status: item.request_status,
+          request_id: item.request_id,
+          booking_id: item.booking_id,
+        })),
+        request_ids: sorted.map(item => item.request_id),
+        booking_ids: sorted.map(item => item.booking_id).filter(Boolean),
+      };
+    }
+
     function statusClass(status) {
       const value = String(status || '').toLowerCase();
       if (value === 'approved') return 'badge-approved';
@@ -1161,12 +1203,33 @@
 
     function updateStats() {
       const total = allBookings.length;
-      const approved = allBookings.filter(b => String(b.request_status || '').toLowerCase() === 'approved').length;
-      const pending = allBookings.filter(b => {
-        const s = String(b.request_status || '').toLowerCase();
-        return s.includes('pending') || s === 'waitlisted';
-      }).length;
-      const rejected = allBookings.filter(b => String(b.request_status || '').toLowerCase() === 'rejected').length;
+      let approved = 0;
+      let pending = 0;
+      let rejected = 0;
+
+      allBookings.forEach(b => {
+        if (Array.isArray(b.slot_ranges) && b.slot_ranges.length > 0) {
+          b.slot_ranges.forEach(slot => {
+            const s = String(slot.status || '').toLowerCase();
+            if (s === 'approved') {
+              approved += 1;
+            } else if (s.includes('pending') || s === 'waitlisted') {
+              pending += 1;
+            } else if (s === 'rejected') {
+              rejected += 1;
+            }
+          });
+        } else {
+          const s = String(b.request_status || '').toLowerCase();
+          if (s === 'approved') {
+            approved += 1;
+          } else if (s.includes('pending') || s === 'waitlisted') {
+            pending += 1;
+          } else if (s === 'rejected') {
+            rejected += 1;
+          }
+        }
+      });
 
       totalCountEl.textContent = String(total);
       approvedCountEl.textContent = String(approved);
@@ -1195,6 +1258,19 @@
         item.suggested_start ? ['Suggestion', `${fmtDateTime(item.suggested_start)} to ${fmtDateTime(item.suggested_end)}`] : null,
         item.finalized_at ? ['Confirmed At', fmtDateTime(item.finalized_at)] : null
       ];
+
+      if (item.slot_count && item.slot_count > 1 && Array.isArray(item.slot_ranges)) {
+        const slotList = item.slot_ranges.map((slot, idx) => {
+          const label = `${fmtDateTime(slot.start)} to ${fmtDateTime(slot.end)}`;
+          const slotStatus = slot.status ? ` (${slot.status})` : '';
+          return `${idx + 1}. ${label}${slotStatus}`;
+        }).join('<br>');
+        rows.push(['Slots', slotList]);
+      }
+
+      if (item.booking_ids && item.booking_ids.length > 1) {
+        rows.push(['Booking IDs', item.booking_ids.join(', ')]);
+      }
 
       if (item.user_comment) {
           rows.push(['User Comment', item.user_comment]);
@@ -1269,7 +1345,8 @@
           const purpose = normalize(item.purpose);
           const status = normalize(item.request_status);
           const bookingId = normalize(item.booking_id);
-          return hall.includes(q) || purpose.includes(q) || status.includes(q) || bookingId.includes(q);
+          const bookingIds = normalize((item.booking_ids || []).join(' '));
+          return hall.includes(q) || purpose.includes(q) || status.includes(q) || bookingId.includes(q) || bookingIds.includes(q);
         });
       }
 
@@ -1310,6 +1387,11 @@
           const status = String(item.request_status || 'Unknown');
           const badge = statusClass(status);
           const details = buildDetailsHtml(item);
+          const slotCount = item.slot_count || 1;
+          const multiSlot = slotCount > 1;
+          const dateMain = multiSlot ? `${fmtDate(item.requested_start)} (+${slotCount - 1})` : fmtDate(item.requested_start);
+          const timeMain = multiSlot ? `Multiple slots (${slotCount})` : fmtTimeRange(item.requested_start, item.requested_end);
+          const timeSub = multiSlot ? `First: ${fmtTimeRange(item.requested_start, item.requested_end)}` : `${item.duration_minutes || '-'} mins`;
 
           return `
             <tr>
@@ -1318,12 +1400,12 @@
                 <div class="sub">Room ${item.room_no || '-'}</div>
               </td>
               <td>
-                <div class="date-main">${fmtDate(item.requested_start)}</div>
+                <div class="date-main">${dateMain}</div>
                 <div class="sub">${fmtWeekday(item.requested_start)}</div>
               </td>
               <td>
-                <div class="time-main">${fmtTimeRange(item.requested_start, item.requested_end)}</div>
-                <div class="sub">${item.duration_minutes || '-'} mins</div>
+                <div class="time-main">${timeMain}</div>
+                <div class="sub">${timeSub}</div>
               </td>
               <td>
                 <span class="badge ${badge}">${status}</span>
@@ -1373,7 +1455,7 @@
         if (!res.ok || !Array.isArray(rows)) {
           allBookings = [];
         } else {
-          allBookings = rows;
+          allBookings = groupBookings(rows);
         }
       } catch (e) {
         allBookings = [];

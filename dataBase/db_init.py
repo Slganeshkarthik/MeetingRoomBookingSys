@@ -179,6 +179,7 @@ def init_db():
         CREATE TABLE IF NOT EXISTS booking_requests (
             request_id BIGINT AUTO_INCREMENT PRIMARY KEY,
             booking_id VARCHAR(12) UNIQUE,
+            request_group_id VARCHAR(20) NULL,
             room_no INT NOT NULL,
             purpose VARCHAR(255) NOT NULL,
             number_of_persons INT,
@@ -315,6 +316,7 @@ def init_db():
             "document_path": "document_path VARCHAR(255) NULL",
             "time_slots": "time_slots TEXT NULL",
             "user_comment": "user_comment TEXT NULL",
+            "request_group_id": "request_group_id VARCHAR(20) NULL",
         },
     )
 
@@ -361,6 +363,16 @@ def init_db():
             is_read BOOLEAN NOT NULL DEFAULT FALSE,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
+        """
+    )
+
+    # Set finalized_at for existing terminal states that don't have it set
+    cursor.execute(
+        """
+        UPDATE booking_requests
+        SET finalized_at = COALESCE(updated_at, submitted_at, NOW())
+        WHERE request_status IN ('Approved', 'Rejected', 'Cancelled', 'Expired')
+          AND finalized_at IS NULL
         """
     )
 
@@ -485,8 +497,8 @@ def update_user_details(username, name=None, phone=None, email=None, department=
         fields.append("department = %s")
         values.append(department)
     if new_password is not None:
-        import bcrypt
-        hashed = bcrypt.hashpw(new_password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+        from werkzeug.security import generate_password_hash
+        hashed = generate_password_hash(new_password)
         fields.append("hashed_password = %s")
         values.append(hashed)
 
@@ -702,6 +714,7 @@ def create_booking_request(
     document_path=None,
     time_slots=None,
     user_comment=None,
+    request_group_id=None,
 ):
     requester_department = None
     user = get_user_details(username)
@@ -753,6 +766,7 @@ def create_booking_request(
         """
         INSERT INTO booking_requests (
             booking_id,
+            request_group_id,
             room_no,
             purpose,
             number_of_persons,
@@ -770,10 +784,11 @@ def create_booking_request(
             time_slots,
             user_comment
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             booking_id,
+            request_group_id,
             room_no,
             purpose,
             number_of_persons,
@@ -809,6 +824,7 @@ def create_booking_request(
         "booking_id": booking_id,
         "queue_position": queue_position,
         "request_status": request_status,
+        "request_group_id": request_group_id,
     }
 
     if request_status == "Waitlisted":
@@ -896,7 +912,8 @@ def get_requests_for_user(username):
          SELECT br.request_id, br.booking_id, br.room_no, br.purpose, br.number_of_persons,
              br.equipment_needs, br.requested_start, br.requested_end, br.duration_minutes,
              br.queue_position, br.request_status, br.suggested_start, br.suggested_end,
-             br.submitted_at, br.finalized_at, br.time_slots, br.user_comment,
+             br.submitted_at, br.finalized_at, br.time_slots, br.user_comment, br.request_group_id,
+             br.document_path,
              u.phone AS requester_phone
         FROM booking_requests br
         LEFT JOIN users u ON u.username = br.username
@@ -958,7 +975,7 @@ def get_pending_notifications_for_role(role, department=None):
                COALESCE(h.hall_name, CONCAT('Hall ', br.room_no)) AS room_name,
                br.purpose, br.number_of_persons,
                br.equipment_needs, br.document_path, br.user_comment,
-               br.requested_start, br.requested_end, br.request_status,
+             br.requested_start, br.requested_end, br.request_status, br.request_group_id,
                br.username, u.name AS requester_name, u.department AS requester_department, u.phone AS requester_phone,
                ra.decision, ra.comment, br.finalized_at, br.submitted_at
         FROM booking_requests br
@@ -1076,7 +1093,7 @@ def take_approval_action(request_id, role, decision, comment=None, actor_departm
         return {"ok": False, "message": "approval already processed"}
 
     new_status = _next_status_for(role_norm, decision_norm)
-    if new_status == "Approved":
+    if new_status in ("Approved", "Rejected"):
         cursor.execute(
             "UPDATE booking_requests SET request_status=%s, finalized_at=NOW() WHERE request_id=%s",
             (new_status, request_id),
@@ -1237,7 +1254,7 @@ def expire_stale_requests():
     cursor.execute(
         """
         UPDATE booking_requests
-        SET request_status='Expired'
+        SET request_status='Expired', finalized_at=NOW()
         WHERE request_status IN (%s, %s, %s)
           AND approval_due_at IS NOT NULL
           AND approval_due_at < UTC_TIMESTAMP()
@@ -1253,10 +1270,16 @@ def expire_stale_requests():
 def override_booking_status(request_id, new_status, reason=None, actor_role='admin'):
     conn = get_connection()
     cursor = conn.cursor()
-    cursor.execute(
-        "UPDATE booking_requests SET request_status=%s, updated_at=NOW() WHERE request_id=%s",
-        (new_status, request_id),
-    )
+    if new_status in ('Approved', 'Rejected', 'Cancelled', 'Expired'):
+        cursor.execute(
+            "UPDATE booking_requests SET request_status=%s, updated_at=NOW(), finalized_at=NOW() WHERE request_id=%s",
+            (new_status, request_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE booking_requests SET request_status=%s, updated_at=NOW() WHERE request_id=%s",
+            (new_status, request_id),
+        )
     changed = cursor.rowcount
 
     if reason:
@@ -2001,6 +2024,30 @@ def _initialize_default_config():
             VALUES (%s, %s, %s)
             """,
             (key, value, f"Configuration for {key}"),
+        )
+
+    env_overrides = {}
+    env_system_email = (os.environ.get("MAIL_DEFAULT_SENDER") or os.environ.get("MAIL_USERNAME") or "").strip()
+    env_smtp_password = (os.environ.get("MAIL_PASSWORD") or "").strip()
+    env_admin_otp_email = (os.environ.get("ADMIN_OTP_EMAIL") or "").strip()
+
+    if env_system_email:
+        env_overrides["system_email"] = env_system_email
+    if env_smtp_password:
+        env_overrides["smtp_password"] = env_smtp_password
+    if env_admin_otp_email:
+        env_overrides["admin_otp_email"] = env_admin_otp_email
+
+    for key, value in env_overrides.items():
+        cursor.execute(
+            """
+            INSERT INTO app_config (config_key, config_value, description)
+            VALUES (%s, %s, %s)
+            ON DUPLICATE KEY UPDATE
+                config_value=VALUES(config_value),
+                description=VALUES(description)
+            """,
+            (key, value, f"Environment override for {key}"),
         )
     
     conn.commit()

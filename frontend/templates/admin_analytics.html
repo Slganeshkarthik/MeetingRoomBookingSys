@@ -783,6 +783,7 @@
         <a href="/admin-analytics.html" class="active">📈 Analytics</a>
         <a href="/admin-config.html">⚙️ Configuration</a>
         <a href="/admin-mail-health.html">📧 Mail Health</a>
+        <a href="/admin-logs.html">📝 Logs</a>
       </nav>
 
       <div class="sidebar-menu-section">
@@ -799,7 +800,7 @@
         <div class="sidebar-menu-title">System</div>
         <nav class="sidebar-menu">
           <a href="/admin-dashboard.html#backup">💾 Backup</a>
-          <a href="/admin-dashboard.html#logs">📝 Logs</a>
+          <a href="/admin-logs.html">📝 Logs</a>
           <a href="/logout" style="color: #ef4444;">🚪 Logout</a>
         </nav>
       </div>
@@ -1196,6 +1197,15 @@
       return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
     }
 
+    function formatMonthLabel(value) {
+      const text = String(value || '').trim();
+      const match = text.match(/^(\d{4})-(\d{2})/);
+      if (!match) return text || '-';
+      const year = match[1].slice(2);
+      const month = match[2];
+      return `${year}${month}`;
+    }
+
     (function setupSidebarToggle() {
       const layout = document.querySelector('.layout');
       const toggleButton = document.querySelector('[data-sidebar-toggle]');
@@ -1465,7 +1475,7 @@
       charts.monthly = new Chart(ctx, {
         type: 'bar',
         data: {
-          labels: rows.map(row => row.month),
+          labels: rows.map(row => formatMonthLabel(row.month)),
           datasets: [{
             label: 'Bookings',
             data: rows.map(row => number(row.bookings)),

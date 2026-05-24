@@ -183,18 +183,45 @@
 
 
   <!-- Contact -->
+<section class="contact" id="contact">
+  <div class="contact-inner">
+    <div class="contact-header">
+      <span class="contact-icon">📬</span>
+      <h2>Contact Us</h2>
+      <p>Have a question or feedback? Send us a message and we'll get back to you.</p>
+    </div>
 
-<section class="contact">
+    <form id="contactForm" class="contact-form" novalidate>
+      <div class="contact-row">
+        <div class="contact-field">
+          <label for="contactName">Your Name <span class="req">*</span></label>
+          <input id="contactName" type="text" placeholder="e.g. Name" autocomplete="name" required>
+        </div>
+        <div class="contact-field">
+          <label for="contactEmail">Email Address <span class="req">*</span></label>
+          <input id="contactEmail" type="email" placeholder="you@example.com" autocomplete="email" required>
+        </div>
+      </div>
+      <div class="contact-field">
+        <label for="contactSubject">Subject</label>
+        <input id="contactSubject" type="text" placeholder="What's this about?">
+      </div>
+      <div class="contact-field">
+        <label for="contactMessage">Message <span class="req">*</span></label>
+        <textarea id="contactMessage" rows="5" placeholder="Write your message here…" maxlength="3000" required></textarea>
+        <span class="char-count"><span id="contactCharCount">0</span> / 3000</span>
+      </div>
 
-<h2>Contact Us</h2>
+      <p id="contactMsg" class="contact-feedback" aria-live="polite"></p>
 
-<input type="text" placeholder="Your Name">
-<input type="email" placeholder="Email">
-<textarea placeholder="Message"></textarea>
-
-<button>Submit</button>
-
+      <button id="contactSubmitBtn" type="submit" class="contact-submit-btn">
+        <span id="contactBtnText">Send Message ✉️</span>
+        <span id="contactBtnSpinner" class="btn-spinner" style="display:none">Sending…</span>
+      </button>
+    </form>
+  </div>
 </section>
+
 
 
 
@@ -207,5 +234,74 @@
 </footer>
 
 
+<script>
+  (function () {
+    const form    = document.getElementById('contactForm');
+    const msg     = document.getElementById('contactMsg');
+    const btnText = document.getElementById('contactBtnText');
+    const spinner = document.getElementById('contactBtnSpinner');
+    const btn     = document.getElementById('contactSubmitBtn');
+    const textarea= document.getElementById('contactMessage');
+    const counter = document.getElementById('contactCharCount');
+
+    // Character counter
+    if (textarea && counter) {
+      textarea.addEventListener('input', function () {
+        counter.textContent = textarea.value.length;
+      });
+    }
+
+    if (!form) return;
+
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const name    = (document.getElementById('contactName').value || '').trim();
+      const email   = (document.getElementById('contactEmail').value || '').trim();
+      const subject = (document.getElementById('contactSubject').value || '').trim();
+      const message = (textarea.value || '').trim();
+
+      // Client-side validation
+      if (!name) { showMsg('Please enter your name.', false); return; }
+      if (!email || !email.includes('@')) { showMsg('Please enter a valid email address.', false); return; }
+      if (!message) { showMsg('Please write a message.', false); return; }
+
+      setLoading(true);
+      showMsg('', null);
+
+      try {
+        const res = await fetch('/api/contact', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, subject, message })
+        });
+        const data = await res.json();
+
+        if (data.ok) {
+          showMsg(data.message || 'Message sent successfully!', true);
+          form.reset();
+          counter.textContent = '0';
+        } else {
+          showMsg(data.error || 'Something went wrong. Please try again.', false);
+        }
+      } catch (err) {
+        showMsg('Network error. Please check your connection and try again.', false);
+      } finally {
+        setLoading(false);
+      }
+    });
+
+    function showMsg(text, success) {
+      msg.textContent = text;
+      msg.className = 'contact-feedback ' + (success === true ? 'success' : success === false ? 'error' : '');
+    }
+
+    function setLoading(loading) {
+      btn.disabled = loading;
+      btnText.style.display = loading ? 'none' : 'inline';
+      spinner.style.display = loading ? 'inline' : 'none';
+    }
+  })();
+</script>
 </body>
 </html>
