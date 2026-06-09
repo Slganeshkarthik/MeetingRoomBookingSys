@@ -829,6 +829,7 @@
           <a href="/admin-dashboard.html#approvals">✅ Approver Accounts</a>
           <a href="/admin-dashboard.html#users">👥 Users</a>
           <a href="#roomConf">🏢 Meeting Rooms</a>
+          <a href="#emailFormat">📧 Email Format</a>
           <a href="/admin-analytics.html">📋 Reports</a>
         </nav>
       </div>
@@ -1026,6 +1027,59 @@
                 <button class="btn btn-save" type="button" onclick="saveConfig('smtp_password')">Save</button>
               </div>
               <div class="info-text">SMTP password used for mail delivery.</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="emailFormat" class="config-section" style="margin-bottom:14px;">
+        <div class="section-head">
+          <div>
+            <h2>Email Format Restriction</h2>
+            <p>Restrict which email addresses can be used during user self-registration. Leave blank to allow any valid email.</p>
+          </div>
+          <span class="pill">Registration</span>
+        </div>
+
+        <div class="config-group">
+          <div class="config-item">
+            <label class="config-label" for="email_format_regex">Email Regex Pattern</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="email_format_regex" placeholder="e.g. .+@dsce\.edu\.in">
+                <button class="btn btn-save" type="button" onclick="saveConfig('email_format_regex')">Save</button>
+              </div>
+              <div class="info-text">
+                A regular expression (Python / JS compatible) that new users' email addresses must match.
+                Examples:
+                <code>.+@dsce\.edu\.in</code> — only institution emails,
+                <code>.+@(gmail|outlook)\.com</code> — Gmail or Outlook only.
+                Leave empty to allow any email.
+              </div>
+            </div>
+          </div>
+
+          <div class="config-item">
+            <label class="config-label" for="email_format_hint">Format Hint (shown to users)</label>
+            <div class="config-control">
+              <div class="config-input-group">
+                <input type="text" id="email_format_hint" placeholder="e.g. Use your institutional email (xxx@dsce.edu.in)">
+                <button class="btn btn-save" type="button" onclick="saveConfig('email_format_hint')">Save</button>
+              </div>
+              <div class="info-text">
+                Human-readable message displayed on the signup page below the email field and shown as the error when the format doesn't match.
+              </div>
+            </div>
+          </div>
+
+          <div class="config-item" style="grid-template-columns: 1fr; background: #f8fafc;">
+            <div class="config-control">
+              <div style="font-size: 13px; font-weight: 700; color: #344054; margin-bottom: 8px;">🧪 Test the Pattern</div>
+              <div style="display: flex; gap: 8px; align-items: center; flex-wrap: wrap;">
+                <input type="text" id="emailTestInput" class="panel-input" style="flex: 1; min-width: 200px;" placeholder="Enter an email to test…">
+                <button class="btn btn-secondary" type="button" onclick="testEmailPattern()">Test</button>
+              </div>
+              <div id="emailTestResult" style="margin-top: 8px; font-size: 13px; display: none;"></div>
             </div>
           </div>
         </div>
@@ -1651,6 +1705,63 @@
       const div = document.createElement('div');
       div.textContent = text;
       return div.innerHTML;
+    }
+
+    function testEmailPattern() {
+      const patternInput = document.getElementById('email_format_regex');
+      const testInput = document.getElementById('emailTestInput');
+      const resultEl = document.getElementById('emailTestResult');
+
+      const pattern = (patternInput ? patternInput.value.trim() : '') ||
+                      (configCache['email_format_regex'] || '').trim();
+      const testEmail = testInput ? testInput.value.trim() : '';
+
+      resultEl.style.display = 'block';
+
+      if (!pattern) {
+        resultEl.style.background = '#fef9c3';
+        resultEl.style.color = '#92400e';
+        resultEl.style.padding = '8px 10px';
+        resultEl.style.borderRadius = '8px';
+        resultEl.textContent = '⚠️ No pattern set. Enter a pattern in the "Email Regex Pattern" field above first.';
+        return;
+      }
+
+      if (!testEmail) {
+        resultEl.style.background = '#f1f5f9';
+        resultEl.style.color = '#475467';
+        resultEl.style.padding = '8px 10px';
+        resultEl.style.borderRadius = '8px';
+        resultEl.textContent = '✏️ Enter an email address in the test field to try the pattern.';
+        return;
+      }
+
+      let regex;
+      try {
+        regex = new RegExp('^(?:' + pattern + ')$');
+      } catch (e) {
+        resultEl.style.background = '#fee2e2';
+        resultEl.style.color = '#991b1b';
+        resultEl.style.padding = '8px 10px';
+        resultEl.style.borderRadius = '8px';
+        resultEl.textContent = '❌ Invalid regex: ' + e.message;
+        return;
+      }
+
+      const matched = regex.test(testEmail);
+      if (matched) {
+        resultEl.style.background = '#dcfce7';
+        resultEl.style.color = '#166534';
+        resultEl.style.padding = '8px 10px';
+        resultEl.style.borderRadius = '8px';
+        resultEl.textContent = '✅ "' + testEmail + '" matches the pattern — this email would be accepted.';
+      } else {
+        resultEl.style.background = '#fee2e2';
+        resultEl.style.color = '#991b1b';
+        resultEl.style.padding = '8px 10px';
+        resultEl.style.borderRadius = '8px';
+        resultEl.textContent = '❌ "' + testEmail + '" does NOT match the pattern — this email would be rejected.';
+      }
     }
   </script>
 </body>

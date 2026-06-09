@@ -241,6 +241,40 @@
       margin-top: 2px;
     }
 
+    .email-hint {
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--muted);
+      margin-top: 4px;
+      display: none;
+    }
+
+    .email-hint.visible {
+      display: block;
+    }
+
+    .email-error {
+      font-size: 12px;
+      line-height: 1.55;
+      color: #9f1239;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .email-error.visible {
+      display: block;
+    }
+
+    input.invalid-email {
+      border-color: #f43f5e !important;
+      box-shadow: 0 0 0 4px rgba(244, 63, 94, 0.12) !important;
+    }
+
+    input.valid-email {
+      border-color: #16a34a !important;
+      box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.1) !important;
+    }
+
     .actions {
       display: flex;
       gap: 10px;
@@ -421,6 +455,8 @@
           <div class="field">
             <label for="email">Email</label>
             <input id="email" name="email" type="email" required placeholder="name@example.com">
+            <div class="email-hint" id="emailHint"></div>
+            <div class="email-error" id="emailError"></div>
           </div>
           <div class="field">
             <label for="phone">Phone</label>
@@ -459,5 +495,74 @@
       </div>
     </section>
   </div>
+
+  <script>
+    (function () {
+      let emailRegex = null;
+      let emailHint = '';
+
+      const emailInput = document.getElementById('email');
+      const emailHintEl = document.getElementById('emailHint');
+      const emailErrorEl = document.getElementById('emailError');
+      const form = document.querySelector('form');
+
+      // Fetch the admin-configured email format
+      fetch('/api/public/email-format')
+        .then(function (r) { return r.json(); })
+        .catch(function () { return {}; })
+        .then(function (data) {
+          if (data && data.pattern) {
+            try {
+              emailRegex = new RegExp('^(?:' + data.pattern + ')$');
+            } catch (e) {
+              emailRegex = null;
+            }
+            emailHint = data.hint || ('Format required: ' + data.pattern);
+            emailHintEl.textContent = '📋 ' + emailHint;
+            emailHintEl.classList.add('visible');
+          }
+        });
+
+      function validateEmail() {
+        if (!emailRegex) {
+          emailInput.classList.remove('invalid-email', 'valid-email');
+          emailErrorEl.classList.remove('visible');
+          return true;
+        }
+        const val = emailInput.value.trim();
+        if (!val) {
+          emailInput.classList.remove('invalid-email', 'valid-email');
+          emailErrorEl.classList.remove('visible');
+          return false;
+        }
+        const ok = emailRegex.test(val);
+        if (ok) {
+          emailInput.classList.remove('invalid-email');
+          emailInput.classList.add('valid-email');
+          emailErrorEl.classList.remove('visible');
+        } else {
+          emailInput.classList.add('invalid-email');
+          emailInput.classList.remove('valid-email');
+          emailErrorEl.textContent = emailHint || 'Email does not match the required format.';
+          emailErrorEl.classList.add('visible');
+        }
+        return ok;
+      }
+
+      if (emailInput) {
+        emailInput.addEventListener('input', validateEmail);
+        emailInput.addEventListener('blur', validateEmail);
+      }
+
+      if (form) {
+        form.addEventListener('submit', function (e) {
+          if (emailRegex && !validateEmail()) {
+            e.preventDefault();
+            emailInput.focus();
+          }
+        });
+      }
+    })();
+  </script>
 </body>
 </html>

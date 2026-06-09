@@ -15,6 +15,9 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from werkzeug.utils import secure_filename
 import secrets
 import re
+import urllib.request
+import urllib.error
+import json as _json
 
 try:
     flask_mail_module = importlib.import_module('flask_mail')
@@ -113,7 +116,7 @@ app.config['MAIL_USE_SSL'] = str(os.environ.get('MAIL_USE_SSL', 'false')).lower(
 app.config['MAIL_USERNAME'] = os.environ.get('MAIL_USERNAME')
 app.config['MAIL_PASSWORD'] = os.environ.get('MAIL_PASSWORD')
 app.config['MAIL_DEFAULT_SENDER'] = os.environ.get('MAIL_DEFAULT_SENDER', app.config['MAIL_USERNAME'])
-app.config['APP_BASE_URL'] = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+app.config['APP_BASE_URL'] = os.environ.get('APP_BASE_URL', 'https://957cmjxv-5000.inc1.devtunnels.ms/')
 
 # Allow overriding the OTP/admin email via environment for quick dev changes.
 # If ADMIN_OTP_EMAIL is set in the environment (or in .env), use it as the
@@ -129,17 +132,113 @@ CORS(app, supports_credentials=True)
 csrf = CSRFProtect(app)
 mail = Mail(app) if Mail else None
 
+
+# ---------------------------------------------------------------------------
+# Unified email sender — uses SendGrid HTTP API when SENDGRID_API_KEY is set,
+# falls back to Flask-Mail SMTP for local development.
+# SendGrid communicates over HTTPS (port 443) and is never blocked by
+# cloud platforms like Railway or Render.
+# ---------------------------------------------------------------------------
+
+def _resolve_email_sender():
+    """Return the best available sender address."""
+    return (
+        (os.environ.get('MAIL_DEFAULT_SENDER') or '').strip()
+        or (app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
+        or (app.config.get('MAIL_USERNAME') or '').strip()
+    )
+
+
+def _send_via_sendgrid(to_email, subject, body_text, body_html=None, sender=None):
+    """Send an email via SendGrid Web API (HTTPS). Returns {'ok': True/False, 'message': str}."""
+    api_key = (os.environ.get('SENDGRID_API_KEY') or '').strip()
+    if not api_key:
+        return {'ok': False, 'message': 'SENDGRID_API_KEY not set'}
+
+    from_email = sender or _resolve_email_sender()
+    if not from_email:
+        return {'ok': False, 'message': 'No sender email configured'}
+
+    payload = {
+        'personalizations': [{'to': [{'email': to_email}]}],
+        'from': {'email': from_email},
+        'subject': subject,
+        'content': [
+            {'type': 'text/plain', 'value': body_text},
+        ],
+    }
+    if body_html:
+        payload['content'].append({'type': 'text/html', 'value': body_html})
+
+    data = _json.dumps(payload).encode('utf-8')
+    req = urllib.request.Request(
+        'https://api.sendgrid.com/v3/mail/send',
+        data=data,
+        headers={
+            'Authorization': f'Bearer {api_key}',
+            'Content-Type': 'application/json',
+        },
+        method='POST',
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            status = resp.getcode()
+        if status in (200, 202):
+            return {'ok': True}
+        return {'ok': False, 'message': f'SendGrid returned HTTP {status}'}
+    except urllib.error.HTTPError as e:
+        err_body = ''
+        try:
+            err_body = e.read().decode('utf-8', errors='replace')
+        except Exception:
+            pass
+        print(f'[SENDGRID ERROR] HTTP {e.code}: {err_body}')
+        return {'ok': False, 'message': f'SendGrid HTTP {e.code}: {err_body}'}
+    except Exception as e:
+        print(f'[SENDGRID ERROR] {e}')
+        return {'ok': False, 'message': str(e)}
+
+
+def _send_email_universal(to_email, subject, body_text, body_html=None, sender=None):
+    """Try SendGrid first (if configured), fall back to Flask-Mail SMTP."""
+    if os.environ.get('SENDGRID_API_KEY'):
+        return _send_via_sendgrid(to_email, subject, body_text, body_html=body_html, sender=sender)
+
+    # Flask-Mail SMTP fallback
+    if not mail or not Message:
+        return {'ok': False, 'message': 'No email transport configured'}
+    from_addr = sender or _resolve_email_sender()
+    msg = Message(subject=subject, recipients=[to_email], sender=from_addr)
+    msg.body = body_text
+    if body_html:
+        msg.html = body_html
+    try:
+        with app.app_context():
+            mail.send(msg)
+        return {'ok': True}
+    except Exception as e:
+        return {'ok': False, 'message': str(e)}
+
+
 def send_async_email(app_for_thread, message):
     with app_for_thread.app_context():
         try:
-            if mail:
+            if os.environ.get('SENDGRID_API_KEY'):
+                sender = getattr(message, 'sender', None) or _resolve_email_sender()
+                for recipient in (message.recipients or []):
+                    _send_via_sendgrid(
+                        to_email=recipient,
+                        subject=message.subject or '',
+                        body_text=message.body or '',
+                        body_html=getattr(message, 'html', None),
+                        sender=sender,
+                    )
+            elif mail:
                 mail.send(message)
         except Exception as e:
             print(f"Async email send failed: {e}")
 
 def send_email_in_thread(message):
-    if not mail:
-        return
     real_app = app._get_current_object() if hasattr(app, '_get_current_object') else app
     thr = threading.Thread(target=send_async_email, args=(real_app, message))
     thr.start()
@@ -416,29 +515,12 @@ def redirect_for_role(role):
 
 
 def send_login_otp_email(recipient_email, username, role, otp):
-    if not mail or not Message:
-        return {'ok': False, 'message': 'Flask-Mail is not installed'}
-    if not app.config.get('MAIL_USERNAME') or not app.config.get('MAIL_PASSWORD'):
-        return {'ok': False, 'message': 'Mail credentials are not configured'}
-
-    sender = (
-        (app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
-        or (app.config.get('MAIL_USERNAME') or '').strip()
-        or (get_config('system_email') or '').strip()
-    )
-    if not sender:
-        return {'ok': False, 'message': 'SMTP sender is not configured'}
-
     # Deduplicate: avoid sending the same OTP repeatedly within short window
     if _email_was_recently_sent(None, recipient_email, 'otp', window_seconds=60):
         return {'ok': False, 'message': 'OTP recently sent, suppressed'}
 
-    message = Message(
-        subject='Your Login OTP',
-        recipients=[recipient_email],
-        sender=sender,
-    )
-    message.body = (
+    subject = 'Your Login OTP'
+    body_text = (
         f"Hello {username},\n\n"
         f"Your OTP for Meeting Room Booking login is: {otp}\n"
         f"Role: {role}\n"
@@ -446,16 +528,24 @@ def send_login_otp_email(recipient_email, username, role, otp):
         "Do not share this code with anyone.\n"
         "If you did not try to log in, please contact the administrator."
     )
-    # Send synchronously so SMTP errors are caught and returned,
-    # instead of being silently swallowed in a background thread.
-    try:
-        with app.app_context():
-            mail.send(message)
-        return {'ok': True}
-    except Exception as e:
-        error_msg = str(e)
+
+    sender = (
+        (app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
+        or (app.config.get('MAIL_USERNAME') or '').strip()
+        or (get_config('system_email') or '').strip()
+    )
+
+    result = _send_email_universal(
+        to_email=recipient_email,
+        subject=subject,
+        body_text=body_text,
+        sender=sender,
+    )
+    if not result.get('ok'):
+        error_msg = result.get('message', 'Unknown error')
         print(f"[OTP EMAIL ERROR] Failed to send OTP to {recipient_email}: {error_msg}")
-        return {'ok': False, 'message': f'SMTP error: {error_msg}'}
+        return {'ok': False, 'message': f'Email error: {error_msg}'}
+    return {'ok': True}
 
 
 def invalidate_existing_otp_challenges(username):
@@ -1182,13 +1272,16 @@ def _resolve_email_sender():
 
 def get_base_url():
     """Dynamically get base URL for emails from request context or config."""
+    env_base_url = os.environ.get('APP_BASE_URL')
+    if env_base_url:
+        return env_base_url.rstrip('/')
     try:
         from flask import request, has_request_context
         if has_request_context():
             return request.host_url.rstrip('/')
     except Exception:
         pass
-    return app.config.get('APP_BASE_URL', 'http://localhost:5000').rstrip('/')
+    return app.config.get('APP_BASE_URL', 'https://957cmjxv-5000.inc1.devtunnels.ms/').rstrip('/')
 
 
 def send_approval_email_for_stage(request_id, role_name, department=None):
@@ -1264,6 +1357,23 @@ def send_approval_email_for_stage(request_id, role_name, department=None):
         sent += 1
 
     return {'ok': True, 'sent': sent}
+
+
+def _render_one_click_result_page(title, message, success):
+    title_text = html.escape(str(title))
+    message_text = html.escape(str(message))
+    accent = '#16a34a' if success else '#dc2626'
+    return f"""
+    <html>
+    <body style="font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0;">
+        <div style="max-width: 640px; margin: 80px auto; background: #fff; border: 1px solid #e5e7eb; border-radius: 14px; padding: 36px 32px; box-shadow: 0 12px 30px rgba(15, 23, 42, 0.08); text-align: center;">
+            <div style="font-size: 18px; font-weight: 700; color: {accent}; margin-bottom: 14px;">{title_text}</div>
+            <div style="font-size: 15px; line-height: 1.6; color: #334155;">{message_text}</div>
+            <div style="margin-top: 20px; font-size: 13px; color: #64748b;">You can close this tab now.</div>
+        </div>
+    </body>
+    </html>
+    """
 
 
 def send_requester_status_email(request_id, new_status, approver_role):
@@ -2189,6 +2299,18 @@ def cart():
         return redirect(url_for('requester_dashboard_page'))
     return redirect(url_for('home_page'))
 
+@app.route('/api/public/email-format', methods=['GET'])
+def get_public_email_format():
+    """Public endpoint that returns the admin-configured email regex and hint."""
+    pattern = (get_config('email_format_regex') or '').strip()
+    hint = (get_config('email_format_hint') or '').strip()
+    return jsonify({
+        'ok': True,
+        'pattern': pattern,
+        'hint': hint,
+    }), 200
+
+
 @app.route('/signup', methods=['POST'])
 def signup_post():
     try:
@@ -2203,17 +2325,32 @@ def signup_post():
         password = (request.form.get('password') or '').strip()
         hashed_password = generate_password_hash(password)
         if not username or not password:
-            return "Username and password are required!", 400
+            return redirect(url_for('signup', error='Username and password are required'))
 
         role = login_type.lower()
         if role not in SELF_SIGNUP_ROLES:
-            return "This role cannot be self-registered. Please contact admin.", 403
+            return redirect(url_for('signup', error='This role cannot be self-registered. Please contact admin.'))
 
         if len(username) > 20:
-            return "Username is too long (max 20 characters).", 400
+            return redirect(url_for('signup', error='Username is too long (max 20 characters).'))
 
         if len(password) < 6:
-            return "Password must be at least 6 characters.", 400
+            return redirect(url_for('signup', error='Password must be at least 6 characters.'))
+
+        # --- Email format validation (admin-configurable) ---
+        if not email:
+            return redirect(url_for('signup', error='Email address is required.'))
+
+        email_pattern = (get_config('email_format_regex') or '').strip()
+        if email_pattern:
+            try:
+                if not re.fullmatch(email_pattern, email):
+                    hint = (get_config('email_format_hint') or '').strip()
+                    error_msg = hint if hint else f'Email does not match the required format.'
+                    return redirect(url_for('signup', error=error_msg))
+            except re.error:
+                pass  # Malformed regex — skip validation gracefully
+        # --- End email format validation ---
 
         created = create_user_if_not_exists(
             username=username,
@@ -2226,7 +2363,7 @@ def signup_post():
         )
 
         if not created:
-            return "Username already exists! Choose another one.", 409
+            return redirect(url_for('signup', error='Username already exists! Choose another one.'))
 
         # Auto login after signup
         session['username'] = username
@@ -3028,8 +3165,8 @@ def slot_overview():
             return jsonify({'error': 'date must be YYYY-MM-DD'}), 400
 
         session_bounds = {
-            'morning': (5, 12),
-            'evening': (12, 22),
+            'morning': (9, 13),
+            'evening': (13, 19),
         }
         start_hour, end_hour = session_bounds[session_name]
         window_start = datetime.datetime.combine(selected_date, datetime.time(hour=start_hour))
@@ -3652,9 +3789,14 @@ def one_click_approval(token):
                 status_code=400,
             )
         code = 200 if result.get('ok') else 400
-        return jsonify(result), code
+        if result.get('ok'):
+            message = result.get('message') or 'Your approval has been recorded successfully.'
+            return _render_one_click_result_page('Approval processed', message, True), code
+
+        message = result.get('message') or 'The approval link could not be processed.'
+        return _render_one_click_result_page('Approval not processed', message, False), code
     except Exception as e:
-        return jsonify({'error': str(e)}), 500
+        return _render_one_click_result_page('Approval not processed', str(e), False), 500
 
 @app.route('/api/coordinator/confirm/<int:request_id>', methods=['GET'])
 def confirm_setup_complete(request_id):
@@ -4355,16 +4497,13 @@ def admin_mail_health():
 @require_roles('admin')
 def admin_mail_test():
     try:
-        if not mail or not Message:
-            return jsonify({'ok': False, 'error': 'Flask-Mail package is unavailable'}), 400
-
         payload = request.get_json(silent=True) or request.form
         recipient = (payload.get('recipient') or app.config.get('MAIL_USERNAME') or '').strip()
         if not recipient:
             return jsonify({'ok': False, 'error': 'recipient is required'}), 400
 
-        subject = (payload.get('subject') or 'MeetingRoomBooking SMTP test email').strip()
-        body = (payload.get('body') or 'SMTP configuration is working.').strip()
+        subject = (payload.get('subject') or 'MeetingRoomBooking email test').strip()
+        body = (payload.get('body') or 'Email configuration is working correctly.').strip()
 
         sender = (
             (app.config.get('MAIL_DEFAULT_SENDER') or '').strip()
@@ -4372,12 +4511,18 @@ def admin_mail_test():
             or (get_config('system_email') or '').strip()
         )
         if not sender:
-            return jsonify({'ok': False, 'error': 'SMTP sender is not configured. Set System Email first.'}), 400
+            return jsonify({'ok': False, 'error': 'Sender email is not configured. Set System Email first.'}), 400
 
-        message = Message(subject=subject, recipients=[recipient], sender=sender)
-        message.body = body
-        mail.send(message)
-        return jsonify({'ok': True, 'message': f'test email sent to {recipient}'}), 200
+        result = _send_email_universal(
+            to_email=recipient,
+            subject=subject,
+            body_text=body,
+            sender=sender,
+        )
+        if result.get('ok'):
+            transport = 'SendGrid API' if os.environ.get('SENDGRID_API_KEY') else 'SMTP'
+            return jsonify({'ok': True, 'message': f'Test email sent to {recipient} via {transport}'}), 200
+        return jsonify({'ok': False, 'error': result.get('message', 'Unknown error')}), 500
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 
